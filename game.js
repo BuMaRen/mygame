@@ -45,9 +45,12 @@ const cityById = Object.fromEntries(cityData.map(c => [c[0], c]));
 const adjacency = Object.fromEntries(cityData.map(c => [c[0], []]));
 roads.forEach(([a,b]) => { adjacency[a].push(b); adjacency[b].push(a); });
 
-function newGame() {
+const capitals = { shu: 'chengdu', wei: 'luoyang', wu: 'jianye' };
+const rulers = { shu: '刘备', wei: '曹操', wu: '孙权' };
+function newGame(playerFaction = 'shu') {
   return {
-    year: 208, month: 1, selected: 'chengdu', messages: [{ date: '208年1月', text: '刘备军据守巴蜀，天下大势由你决定。' }],
+    year: 208, month: 1, playerFaction, selected: capitals[playerFaction],
+    messages: [{ date: '208年1月', text: `${factions[playerFaction].name}整军待发，天下大势由你决定。` }],
     cities: Object.fromEntries(cityData.map(([id,,x,y,owner,agri,trade,gold,food,troops]) => [id, {
       owner, agri, trade, gold, food, troops, walls: 2, morale: 75, actions: 2, x, y
     }])),
@@ -65,15 +68,24 @@ function loadGame() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
       const value = JSON.parse(raw);
-      if (value && value.cities && value.officers && cityData.every(c => value.cities[c[0]])) return value;
+      if (value && value.cities && value.officers && cityData.every(c => value.cities[c[0]])) {
+        if (!factions[value.playerFaction]) value.playerFaction = 'shu';
+        return value;
+      }
     }
   } catch (_) { /* 无效存档时创建新局 */ }
-  return newGame();
+  return null;
 }
-let state = loadGame();
+const savedGame = loadGame();
+let state = savedGame || newGame();
+let choosingFaction = !savedGame;
+let town = { active: false, city: null, x: 15, y: 12, dir: 'down' };
 const canvas = document.getElementById('worldMap');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+const townCanvas = document.getElementById('townMap');
+const townCtx = townCanvas.getContext('2d');
+townCtx.imageSmoothingEnabled = false;
 const $ = id => document.getElementById(id);
 const cityName = id => cityById[id][1];
 const owned = owner => cityData.filter(c => state.cities[c[0]].owner === owner).map(c => c[0]);
@@ -87,26 +99,34 @@ function log(text) { state.messages.unshift({ date: monthLabel(), text }); state
 let toastTimer;
 function toast(message) { const el = $('toast'); el.textContent = message; el.classList.remove('hidden'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.add('hidden'), 2600); }
 function modal(title, html) { $('modalTitle').textContent = title; $('modalContent').innerHTML = html; $('modal').classList.remove('hidden'); }
-function closeModal() { $('modal').classList.add('hidden'); }
+function closeModal() { if (!choosingFaction) $('modal').classList.add('hidden'); }
 
 function render() {
   const id = state.selected, city = state.cities[id], owner = factions[city.owner];
   $('dateLabel').textContent = monthLabel();
-  $('factionLabel').textContent = '刘备军';
-  $('ownedLabel').textContent = `城池 ${owned('shu').length} / ${cityData.length}`;
+  $('factionLabel').textContent = factions[state.playerFaction].name;
+  $('ownedLabel').textContent = `城池 ${owned(state.playerFaction).length} / ${cityData.length}`;
+  const legendOrder=[state.playerFaction,...Object.keys(factions).filter(f=>f!==state.playerFaction)];
+  ['legendPlayer','legendRival','legendOther'].forEach((element,index)=>{
+    const key=legendOrder[index],f=factions[key],node=$(element);
+    node.lastChild.textContent=index===0?'我军':f.name;
+    node.querySelector('i').style.background=f.color;
+  });
   $('cityName').textContent = cityName(id);
-  $('citySubtitle').textContent = city.owner === 'shu' ? '治下城池 · 发号施令' : `${owner.name}治下 · ${adjacency[id].filter(n => state.cities[n].owner === 'shu').length ? '与我军接壤' : '尚未接壤'}`;
+  $('citySubtitle').textContent = city.owner === state.playerFaction ? '治下城池 · 发号施令' : `${owner.name}治下 · ${adjacency[id].filter(n => state.cities[n].owner === state.playerFaction).length ? '与我军接壤' : '尚未接壤'}`;
   $('cityOwnerBadge').textContent = owner.name;
   $('cityOwnerBadge').style.background = owner.color;
   $('cityLevel').textContent = `城防 ${city.walls} 级`;
-  $('cityAction').textContent = city.owner === 'shu' ? `本月指令 ${city.actions} / 2` : '';
+  $('cityAction').textContent = city.owner === state.playerFaction ? `本月指令 ${city.actions} / 2` : '';
   const stats = [
     ['兵力',fmt(city.troops),'⚔'],['军粮',fmt(city.food),'穗'],
     ['金钱',fmt(city.gold),'枚'],['士气',`${city.morale}%`,'旗'],
     ['农业',`${city.agri} 级`,'月产'],['商业',`${city.trade} 级`,'月产']
   ];
   $('statsGrid').innerHTML = stats.map(([label,value,note]) => `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value">${value}</div><div class="stat-note">${note}</div></div>`).join('');
-  const own = city.owner === 'shu' && !state.gameOver;
+  const own = city.owner === state.playerFaction && !state.gameOver;
+  $('enterTownButton').disabled = !own;
+  $('enterTownButton').textContent = own ? `进入${cityName(id)}游览 ↗` : '只能游览我方城池';
   const actions = [
     ['develop','开发农业','金 300 · 粮产提升','田'],['commerce','发展商业','金 300 · 金产提升','商'],
     ['recruit','征募士兵','金 260 / 粮 180','兵'],['fortify','修筑城防','金 400 · 防守提升','墙'],
@@ -116,9 +136,10 @@ function render() {
   $('actions').innerHTML = own ? actions.map(([key,label,description,icon]) => `<button class="action-button" data-action="${key}" ${city.actions <= 0 ? 'disabled' : ''}><span class="action-icon">${icon}</span><strong>${label}</strong><small>${description}</small></button>`).join('') : `<div class="empty-note">${state.gameOver ? '本局已结束，可在“?”菜单中开启新局。' : '选择我方城池下达内政或军事指令。'}</div>`;
   const people = officersAt(id);
   $('officerCount').textContent = `${people.length} 人`;
-  $('officers').innerHTML = people.length ? people.map(o => `<div class="officer"><span class="portrait">${o.name.slice(0,1)}</span><span class="officer-main"><strong>${o.name}</strong><small>武 ${o.war} · 智 ${o.int} · 政 ${o.politics}</small></span><span class="officer-role">${o.faction === 'shu' ? '麾下' : factions[o.faction].short + '军'}</span></div>`).join('') : '<div class="empty-note">暂无驻城武将</div>';
+  $('officers').innerHTML = people.length ? people.map(o => `<div class="officer"><span class="portrait">${o.name.slice(0,1)}</span><span class="officer-main"><strong>${o.name}</strong><small>武 ${o.war} · 智 ${o.int} · 政 ${o.politics}</small></span><span class="officer-role">${o.faction === state.playerFaction ? '麾下' : factions[o.faction].short + '军'}</span></div>`).join('') : '<div class="empty-note">暂无驻城武将</div>';
   $('log').innerHTML = state.messages.slice(0,5).map(m => `<div class="log-entry"><span class="month">${m.date}</span><span>${m.text}</span></div>`).join('');
   drawMap();
+  if (town.active) drawTown();
 }
 
 function hash(x,y,seed=0) { let n=(x*374761393+y*668265263+seed*1442695041)|0; n=(n^(n>>>13))*1274126177; return ((n^(n>>>16))>>>0)/4294967295; }
@@ -175,7 +196,7 @@ function spendAction(id) { state.cities[id].actions--; save(true); render(); }
 function requireResources(city,gold,food=0) { if(city.gold<gold||city.food<food){toast(`资源不足：需要金 ${gold}${food ? `、粮 ${food}` : ''}`);return false} return true; }
 function act(key) {
   const id=state.selected,c=state.cities[id];
-  if(c.owner!=='shu'||c.actions<=0||state.gameOver)return;
+  if(c.owner!==state.playerFaction||c.actions<=0||state.gameOver)return;
   const politics=maxOfficer(id,'politics');
   if(key==='develop'){
     if(!requireResources(c,300))return;c.gold-=300;c.agri=clamp(c.agri+1,1,10);log(`${cityName(id)}开垦田地，农业升至 ${c.agri} 级。`);spendAction(id);toast('农业提升，来月可获更多军粮');
@@ -192,7 +213,7 @@ function act(key) {
   else if(key==='march') openMarch(id);
 }
 function openTransfer(id) {
-  const candidates=officersAt(id),targets=adjacency[id].filter(t=>state.cities[t].owner==='shu');
+  const candidates=officersAt(id),targets=adjacency[id].filter(t=>state.cities[t].owner===state.playerFaction);
   if(!candidates.length){toast('本城没有可调任的武将');return}
   if(!targets.length){toast('没有相邻的我方城池');return}
   modal('武将调任',`<p>调任一名武将至相邻我方城池，占用本城一条指令。驻城武将的能力会影响内政与战斗。</p><label for="officerSelect">选择武将</label><select id="officerSelect">${candidates.map((o,i)=>`<option value="${i}">${o.name}　武 ${o.war} · 智 ${o.int} · 政 ${o.politics}</option>`).join('')}</select><label for="transferTarget">调往城池</label><select id="transferTarget">${targets.map(t=>`<option value="${t}">${cityName(t)}</option>`).join('')}</select><div class="modal-actions"><button id="confirmTransfer">确认调任</button></div>`);
@@ -210,7 +231,7 @@ function openHire(id) {
   $('confirmHire').onclick=()=>{
     const index=Number($('hireSelect').value),person=state.freeOfficers[index];if(!person)return;
     c.gold-=500;const chance=clamp(0.52+maxOfficer(id,'politics')/250,0.55,0.9);
-    if(Math.random()<chance){state.officers.push({...person,city:id,faction:'shu',loyalty:75});state.freeOfficers.splice(index,1);log(`${cityName(id)}招得${person.name}归附。`);toast(`${person.name}加入我军！`)}
+    if(Math.random()<chance){state.officers.push({...person,city:id,faction:state.playerFaction,loyalty:75});state.freeOfficers.splice(index,1);log(`${cityName(id)}招得${person.name}归附。`);toast(`${person.name}加入我军！`)}
     else {log(`使者未能说服${person.name}，寻访无果。`);toast('寻访失败，下月可再试')}
     closeModal();spendAction(id);
   };
@@ -220,7 +241,7 @@ function openMarch(id) {
   if(c.troops<700){toast('至少需要 700 兵才能出征，并留守 200 兵');return}
   const options=targets.map(t=>`<option value="${t}">${cityName(t)} · ${factions[state.cities[t].owner].name} · 守军 ${fmt(state.cities[t].troops)}</option>`).join('');
   modal('出征调兵',`<p>沿道路行军一城。进攻敌城将在地图上直接结算战斗，无需进入战场。</p><label for="targetSelect">目标城池</label><select id="targetSelect">${options}</select><label for="troopAmount">出征兵力（至少 500，最多保留 200 守军）</label><input id="troopAmount" type="number" min="500" step="100" max="${Math.max(500,c.troops-200)}" value="${Math.max(500,Math.floor((c.troops-200)*.7/100)*100)}"><div id="marchPreview" class="modal-info"></div><div class="modal-actions"><button id="confirmMarch">确认出征</button></div>`);
-  function preview(){const t=$('targetSelect').value,d=state.cities[t],amount=Number($('troopAmount').value);const attack=Math.round(amount*(.8+maxOfficer(id,'war')/180)*(c.morale/85));const defense=Math.round(d.troops*(.8+maxOfficer(t,'war')/200)*(d.morale/85)*(1+d.walls*.09));$('marchPreview').textContent=d.owner==='shu'?`我方城池：可调拨 ${fmt(amount)} 兵与随军粮草。`:`预计军势 ${fmt(attack)} 对守城军势 ${fmt(defense)}。攻城还需携带军粮 ${fmt(Math.ceil(amount*.12))}。`;}
+  function preview(){const t=$('targetSelect').value,d=state.cities[t],amount=Number($('troopAmount').value);const attack=Math.round(amount*(.8+maxOfficer(id,'war')/180)*(c.morale/85));const defense=Math.round(d.troops*(.8+maxOfficer(t,'war')/200)*(d.morale/85)*(1+d.walls*.09));$('marchPreview').textContent=d.owner===state.playerFaction?`我方城池：可调拨 ${fmt(amount)} 兵与随军粮草。`:`预计军势 ${fmt(attack)} 对守城军势 ${fmt(defense)}。攻城还需携带军粮 ${fmt(Math.ceil(amount*.12))}。`;}
   $('targetSelect').onchange=preview;$('troopAmount').oninput=preview;preview();
   $('confirmMarch').onclick=()=>{
     const t=$('targetSelect').value,amount=Math.floor(Number($('troopAmount').value)),d=state.cities[t];
@@ -228,13 +249,14 @@ function openMarch(id) {
     const foodCost=Math.ceil(amount*.12);
     if(c.food<foodCost){toast(`军粮不足，需要 ${fmt(foodCost)}`);return}
     c.food-=foodCost;c.troops-=amount;closeModal();
-    if(d.owner==='shu'){
-      d.troops+=amount;d.food+=Math.floor(foodCost*.7);const moved=officersAt(id).filter(o=>o.name!=='刘备');if(moved.length && officersAt(id).length>1){const general=moved.sort((a,b)=>b.war-a.war)[0];general.city=t;log(`${general.name}率 ${fmt(amount)} 兵自${cityName(id)}移驻${cityName(t)}。`)}else log(`${cityName(id)}向${cityName(t)}调拨 ${fmt(amount)} 兵。`);
+    if(d.owner===state.playerFaction){
+      d.troops+=amount;d.food+=Math.floor(foodCost*.7);const moved=officersAt(id).filter(o=>o.name!==rulers[state.playerFaction]);if(moved.length && officersAt(id).length>1){const general=moved.sort((a,b)=>b.war-a.war)[0];general.city=t;log(`${general.name}率 ${fmt(amount)} 兵自${cityName(id)}移驻${cityName(t)}。`)}else log(`${cityName(id)}向${cityName(t)}调拨 ${fmt(amount)} 兵。`);
       toast('调兵完成');
     } else {
-      const result=resolveBattle(id,t,amount,'shu');log(result.text);toast(result.short);
+      const result=resolveBattle(id,t,amount,state.playerFaction);log(result.text);toast(result.short);
       if(result.won)state.selected=t;
     }
+    if(town.active)leaveTown();
     spendAction(id);checkVictory();render();
   };
 }
@@ -251,8 +273,8 @@ function resolveBattle(from,to,amount,attacker) {
     if(escape)state.cities[escape].troops+=fleeing;
     const defeated=officersAt(to);defeated.forEach(o=>{if(escape)o.city=escape;else {o.faction=attacker;o.city=to;o.loyalty=55}});
     dst.owner=attacker;dst.troops=survivors;dst.morale=clamp(Math.round(src.morale*.75),40,80);dst.walls=Math.max(1,dst.walls-1);dst.gold=Math.round(dst.gold*.7);dst.food=Math.round(dst.food*.7);dst.actions=0;
-    if(attacker==='shu'){
-      const leader=officersAt(from).filter(o=>o.name!=='刘备').sort((a,b)=>b.war-a.war)[0];if(leader&&officersAt(from).length>1)leader.city=to;
+    if(attacker===state.playerFaction){
+      const leader=officersAt(from).filter(o=>o.name!==rulers[state.playerFaction]).sort((a,b)=>b.war-a.war)[0];if(leader&&officersAt(from).length>1)leader.city=to;
     }
     return {won:true,text:`${factions[attacker].name}攻克${cityName(to)}，余兵 ${fmt(survivors)}。`,short:`攻克${cityName(to)}！`};
   }
@@ -269,11 +291,12 @@ function nextMonth() {
     const harvest=Math.round(c.agri*(90+maxOfficer(id,'politics')*.4));
     const upkeep=Math.ceil(c.troops*.065);
     c.gold+=revenue;c.food+=harvest-upkeep;
-    if(c.food<0){const loss=Math.min(c.troops,Math.ceil(-c.food*1.8));c.troops-=loss;c.food=0;c.morale=clamp(c.morale-12,20,100);if(c.owner==='shu')log(`${cityName(id)}军粮不足，损失 ${fmt(loss)} 兵！`)}
+    if(c.food<0){const loss=Math.min(c.troops,Math.ceil(-c.food*1.8));c.troops-=loss;c.food=0;c.morale=clamp(c.morale-12,20,100);if(c.owner===state.playerFaction)log(`${cityName(id)}军粮不足，损失 ${fmt(loss)} 兵！`)}
     else c.morale=clamp(c.morale+3,20,100);
     c.actions=2;
   }
-  aiTurn('wei');aiTurn('wu');
+  Object.keys(factions).filter(f=>f!==state.playerFaction).forEach(aiTurn);
+  if(town.active && state.cities[town.city].owner!==state.playerFaction) leaveTown();
   log('新的一月开始，粮饷已结算，各城可继续下令。');
   checkVictory();save(true);render();
   if(!state.gameOver)toast(`${monthLabel()} · 月度结算完成`);
@@ -302,11 +325,19 @@ function aiTurn(faction) {
 }
 function checkVictory() {
   if(state.gameOver)return;
-  const count=owned('shu').length;
-  if(count===cityData.length){state.gameOver=true;modal('天下一统',`<p>你率领刘备军统一了九州！历时至 ${monthLabel()}，十四座城池皆归麾下。</p><div class="modal-actions"><button id="restartGame">再开一局</button></div>`);$('restartGame').onclick=restart;save(true)}
-  else if(count===0){state.gameOver=true;modal('大势已去',`<p>刘备军已失去所有城池。重整旗鼓，试试先积粮固守，再集中兵力突围。</p><div class="modal-actions"><button id="restartGame">重新开始</button></div>`);$('restartGame').onclick=restart;save(true)}
+  const count=owned(state.playerFaction).length;
+  if(count===cityData.length){state.gameOver=true;modal('天下一统',`<p>你率领${factions[state.playerFaction].name}统一了九州！历时至 ${monthLabel()}，十四座城池皆归麾下。</p><div class="modal-actions"><button id="restartGame">再开一局</button></div>`);$('restartGame').onclick=showFactionSelection;save(true)}
+  else if(count===0){state.gameOver=true;leaveTown();modal('大势已去',`<p>${factions[state.playerFaction].name}已失去所有城池。重整旗鼓，试试先积粮固守，再集中兵力突围。</p><div class="modal-actions"><button id="restartGame">重新开始</button></div>`);$('restartGame').onclick=showFactionSelection;save(true)}
 }
-function restart(){state=newGame();save(true);closeModal();render();toast('新的征途开始了')}
+function showFactionSelection() {
+  choosingFaction = true;
+  $('modalClose').style.display = 'none';
+  modal('选择起始军阀', `<p>选择你要率领的势力。三方各有不同的起始城池与武将；之后可在战略地图经营，也能进入我方城池游览。</p><div class="faction-choices">${Object.entries(factions).map(([id,f])=>`<button class="faction-choice" data-faction="${id}"><strong style="color:${f.light}">${f.name}</strong><span>起始据点 ${cityName(capitals[id])} · ${cityData.filter(c=>c[4]===id).length} 座城池</span></button>`).join('')}</div>`);
+}
+function restart(faction) {
+  if (!factions[faction]) return;
+  state = newGame(faction); choosingFaction = false; $('modalClose').style.display = ''; leaveTown(); save(true); closeModal(); render(); toast(`${factions[faction].name}的征途开始了`);
+}
 
 canvas.addEventListener('click',event=>{
   const r=canvas.getBoundingClientRect(),x=(event.clientX-r.left)*W/r.width,y=(event.clientY-r.top)*H/r.height;
@@ -322,15 +353,35 @@ canvas.addEventListener('mousemove',event=>{
 $('actions').addEventListener('click',event=>{const button=event.target.closest('[data-action]');if(button)act(button.dataset.action)});
 $('endTurnButton').onclick=nextMonth;
 $('saveButton').onclick=()=>save();
+function confirmNewGame() { modal('开启新局',`<p>当前进度将被覆盖。确定重新开始吗？</p><div class="modal-actions"><button id="confirmRestart">确定，重新开始</button></div>`); }
+$('newGameButtonTop').onclick=confirmNewGame;
 $('modalClose').onclick=closeModal;
 $('modal').addEventListener('click',event=>{if(event.target===$('modal'))closeModal()});
-$('helpButton').onclick=()=>modal('行军指南',`<p>目标是统一地图上的 14 座城池。每座我方城池每月可执行两次指令。月末会获得金钱和军粮，同时部队消耗军粮。</p><h3>内政与人才</h3><p>农业提高军粮产量，商业提高金钱收入。征兵、筑城和寻访武将都消耗金钱。武将的政治影响收入和征兵，武力影响战斗。</p><h3>行军与战斗</h3><p>先选择我方城池，再点“出征调兵”。只能沿道路前往相邻城池。进攻敌城会按兵力、武将武力、士气、城防与少量随机因素即时结算。</p><h3>地图操作</h3><p>点击城池选择；方向键或 WASD 可切换城池。N 键结束本月，Esc 关闭窗口。进度存于当前浏览器。</p><div class="modal-actions"><button id="newGameButton">开启新局</button></div>`);
-$('modalContent').addEventListener('click',event=>{if(event.target.id==='newGameButton'){modal('开启新局',`<p>当前进度将被覆盖。确定重新开始吗？</p><div class="modal-actions"><button id="confirmRestart">确定，重新开始</button></div>`)}else if(event.target.id==='confirmRestart')restart()});
+$('helpButton').onclick=()=>modal('行军指南',`<p>先选择刘备军、曹操军或孙权军，再统一地图上的 14 座城池。每座我方城池每月可执行两次指令；月末获得金钱和军粮，同时部队消耗军粮。</p><h3>战略与城内</h3><p>战略地图负责选择城池、沿道路行军和即时结算战斗。点击“进入城池游览”可在像素城内行走；靠近府衙、市集、兵营后按 Enter 使用城池指令。</p><h3>操作</h3><p>方向键或 WASD 移动，Enter 交互，N 结束本月，Esc 返回战略地图或关闭窗口。进度保存在当前浏览器。</p><div class="modal-actions"><button id="newGameButton">开启新局</button></div>`);
+$('modalContent').addEventListener('click',event=>{
+  const factionButton=event.target.closest('[data-faction]');
+  if(factionButton){restart(factionButton.dataset.faction);return}
+  const townButton=event.target.closest('[data-town-action]');
+  if(townButton){closeModal();act(townButton.dataset.townAction);return}
+  if(event.target.id==='newGameButton')confirmNewGame();
+  else if(event.target.id==='confirmRestart')showFactionSelection();
+});
 document.addEventListener('keydown',event=>{
-  if(event.key==='Escape'){closeModal();return}
+  if(event.key==='Escape'){
+    if(choosingFaction)return;
+    if(!$('modal').classList.contains('hidden'))closeModal();
+    else if(town.active)leaveTown();
+    return;
+  }
   if(!$('modal').classList.contains('hidden')||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;
   if(event.key.toLowerCase()==='n'){nextMonth();return}
-  if(event.key==='Enter'){if(state.cities[state.selected].owner==='shu')openMarch(state.selected);return}
+  if(town.active){
+    if(event.key==='Enter'||event.key.toLowerCase()==='e'){event.preventDefault();interactTown();return}
+    const moves={ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0],ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1]};
+    const move=moves[event.key];if(move){event.preventDefault();moveTown(...move)}
+    return;
+  }
+  if(event.key==='Enter'){if(state.cities[state.selected].owner===state.playerFaction)openMarch(state.selected);return}
   const directions={ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0],ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1]};
   const dir=directions[event.key];if(!dir)return;event.preventDefault();
   const current=state.cities[state.selected];let best=null,bestScore=Infinity;
@@ -343,3 +394,4 @@ document.addEventListener('keydown',event=>{
   if(best){state.selected=best;render()}
 });
 render();
+if(choosingFaction)showFactionSelection();
