@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#1b2832" />
+  <title>九州行军录</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">九</span><div><strong>九州行军录</strong><small>像素三国 · 策略经营</small></div></div>
+      <div class="turn-info"><span id="dateLabel"></span><span class="divider"></span><span id="factionLabel"></span><span class="divider"></span><span id="ownedLabel"></span></div>
+      <div class="top-actions"><button id="helpButton" class="icon-button" title="玩法说明">?</button><button id="saveButton" class="subtle-button">存档</button><button id="endTurnButton" class="primary-button">结束本月 <b>↵</b></button></div>
+    </header>
+
+    <main class="layout">
+      <section class="world-panel">
+        <div class="map-title"><div><span class="tag">天下形势</span><h1>九州地图</h1></div><div class="map-tools"><span class="legend"><i class="legend-dot player"></i>我军</span><span class="legend"><i class="legend-dot rival"></i>曹军</span><span class="legend"><i class="legend-dot other"></i>孙军</span></div></div>
+        <div class="map-frame"><canvas id="worldMap" width="800" height="544" aria-label="九州战略地图"></canvas><div class="map-vignette"></div><div id="mapHint" class="map-hint">点击城池查看详情 · 沿道路向相邻城池进军</div></div>
+        <div class="bottom-strip"><span>方向键 / WASD 选择城池</span><span><kbd>Enter</kbd> 出征调兵　<kbd>Esc</kbd> 返回　<kbd>N</kbd> 结束本月</span></div>
+      </section>
+
+      <aside class="sidebar">
+        <div class="sidebar-heading"><span class="eyebrow">城池事务</span><h2 id="cityName"></h2><p id="citySubtitle"></p></div>
+        <div class="city-banner"><span id="cityOwnerBadge" class="owner-badge"></span><span id="cityLevel"></span><span id="cityAction"></span></div>
+        <div class="stats-grid" id="statsGrid"></div>
+        <div class="section-head"><h3>城池指令</h3><span id="actionCount"></span></div>
+        <div id="actions" class="actions"></div>
+        <div class="section-head officers-title"><h3>驻城武将</h3><span id="officerCount"></span></div>
+        <div id="officers" class="officers"></div>
+        <div class="section-head log-title"><h3>军报</h3><span>最近动态</span></div>
+        <div id="log" class="log"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="modal" class="modal-backdrop hidden" role="dialog" aria-modal="true"><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button">×</button></div><div id="modalContent"></div></div></div>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="game.js"></script>
+</body>
+</html>
