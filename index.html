@@ -18,8 +18,8 @@
     <main class="layout">
       <section id="worldPanel" class="world-panel">
         <div class="map-title"><div><span class="tag">天下形势</span><h1>九州地图</h1></div><div class="map-tools"><span id="legendPlayer" class="legend"><i class="legend-dot player"></i>我军</span><span id="legendRival" class="legend"><i class="legend-dot rival"></i>曹军</span><span id="legendOther" class="legend"><i class="legend-dot other"></i>孙军</span></div></div>
-        <div class="map-frame"><canvas id="worldMap" width="800" height="544" aria-label="九州战略地图"></canvas><div class="map-vignette"></div><div id="mapHint" class="map-hint">点击城池查看详情 · 沿道路向相邻城池进军</div></div>
-        <div class="bottom-strip"><span>方向键 / WASD 选择城池</span><span><kbd>Enter</kbd> 出征调兵　<kbd>Esc</kbd> 返回　<kbd>N</kbd> 结束本月</span></div>
+        <div class="map-frame"><canvas id="worldMap" width="800" height="544" aria-label="九州战略地图"></canvas><div class="map-vignette"></div><div id="mapHint" class="map-hint">点击城池查看详情 · 点击空白处返回阵营总览</div></div>
+        <div class="bottom-strip"><span>点击城池查看详情；选中后可用方向键 / WASD 切换</span><span><kbd>Esc</kbd> 阵营总览　<kbd>N</kbd> 结束本月</span></div>
       </section>
 
       <section id="townPanel" class="world-panel town-panel hidden">
@@ -29,7 +29,15 @@
       </section>
 
       <aside class="sidebar">
+        <div id="factionOverview">
+          <div class="sidebar-heading"><span class="eyebrow">天下形势</span><h2>阵营总览</h2><p>点击地图上的城池，再查看具体城池事务</p></div>
+          <div id="factionCards" class="faction-cards"></div>
+          <div class="section-head log-title"><h3>军报</h3><span>最近动态</span></div>
+          <div id="overviewLog" class="log"></div>
+        </div>
+        <div id="cityDetails" class="hidden">
         <div class="sidebar-heading"><span class="eyebrow">城池事务</span><h2 id="cityName"></h2><p id="citySubtitle"></p></div>
+        <button id="backToOverview" class="back-overview-button">← 返回阵营总览</button>
         <div class="city-banner"><span id="cityOwnerBadge" class="owner-badge"></span><span id="cityLevel"></span><span id="cityAction"></span></div>
         <button id="enterTownButton" class="enter-town-button">进入城池游览 <span>↗</span></button>
         <div class="stats-grid" id="statsGrid"></div>
@@ -39,6 +47,7 @@
         <div id="officers" class="officers"></div>
         <div class="section-head log-title"><h3>军报</h3><span>最近动态</span></div>
         <div id="log" class="log"></div>
+        </div>
       </aside>
     </main>
   </div>

@@ -80,6 +80,7 @@ const savedGame = loadGame();
 let state = savedGame || newGame();
 let choosingFaction = !savedGame;
 let town = { active: false, city: null, x: 15, y: 12, dir: 'down' };
+let inspectedCity = null;
 const canvas = document.getElementById('worldMap');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
@@ -102,7 +103,6 @@ function modal(title, html) { $('modalTitle').textContent = title; $('modalConte
 function closeModal() { if (!choosingFaction) $('modal').classList.add('hidden'); }
 
 function render() {
-  const id = state.selected, city = state.cities[id], owner = factions[city.owner];
   $('dateLabel').textContent = monthLabel();
   $('factionLabel').textContent = factions[state.playerFaction].name;
   $('ownedLabel').textContent = `城池 ${owned(state.playerFaction).length} / ${cityData.length}`;
@@ -112,6 +112,18 @@ function render() {
     node.lastChild.textContent=index===0?'我军':f.name;
     node.querySelector('i').style.background=f.color;
   });
+  const latestLog=state.messages.slice(0,5).map(m => `<div class="log-entry"><span class="month">${m.date}</span><span>${m.text}</span></div>`).join('');
+  $('overviewLog').innerHTML=latestLog;
+  $('factionCards').innerHTML=legendOrder.map(key=>{
+    const f=factions[key],cities=owned(key),troops=cities.reduce((sum,id)=>sum+state.cities[id].troops,0);
+    return `<div class="faction-card" style="--faction-color:${f.color}"><div class="faction-card-head"><span class="faction-emblem">${f.short}</span><div><strong>${f.name}</strong><small>${key===state.playerFaction?'我方势力':'交战势力'} · ${rulers[key]}统领</small></div><b>${cities.length} 城</b></div><div class="faction-card-stats"><span>总兵力 <strong>${fmt(troops)}</strong></span><span>武将 <strong>${state.officers.filter(o=>o.faction===key).length}</strong></span></div><p>${cities.length?cities.map(cityName).join(' · '):'已失去全部城池'}</p></div>`;
+  }).join('');
+  const hasCity=Boolean(inspectedCity && state.cities[inspectedCity]);
+  $('factionOverview').classList.toggle('hidden',hasCity);
+  $('cityDetails').classList.toggle('hidden',!hasCity);
+  if(!hasCity){drawMap();return}
+  const id=inspectedCity,city=state.cities[id],owner=factions[city.owner];
+  state.selected=id;
   $('cityName').textContent = cityName(id);
   $('citySubtitle').textContent = city.owner === state.playerFaction ? '治下城池 · 发号施令' : `${owner.name}治下 · ${adjacency[id].filter(n => state.cities[n].owner === state.playerFaction).length ? '与我军接壤' : '尚未接壤'}`;
   $('cityOwnerBadge').textContent = owner.name;
@@ -137,7 +149,7 @@ function render() {
   const people = officersAt(id);
   $('officerCount').textContent = `${people.length} 人`;
   $('officers').innerHTML = people.length ? people.map(o => `<div class="officer"><span class="portrait">${o.name.slice(0,1)}</span><span class="officer-main"><strong>${o.name}</strong><small>武 ${o.war} · 智 ${o.int} · 政 ${o.politics}</small></span><span class="officer-role">${o.faction === state.playerFaction ? '麾下' : factions[o.faction].short + '军'}</span></div>`).join('') : '<div class="empty-note">暂无驻城武将</div>';
-  $('log').innerHTML = state.messages.slice(0,5).map(m => `<div class="log-entry"><span class="month">${m.date}</span><span>${m.text}</span></div>`).join('');
+  $('log').innerHTML = latestLog;
   drawMap();
   if (town.active) drawTown();
 }
@@ -165,6 +177,12 @@ function drawMap() {
     } else if(t==='mountain') {ctx.fillStyle='#727c76';ctx.fillRect(x+3,y+8,11,5);ctx.fillStyle='#c0ba9e';ctx.fillRect(x+6,y+3,6,6);ctx.fillStyle='#e4d9b6';ctx.fillRect(x+8,y+2,2,3)}
     else {ctx.fillStyle='#a2c7be';ctx.fillRect(x+3+(v>.5?6:0),y+8,5,1)}
   }
+  // Subtle ownership tint keeps the terrain visible while making the factions readable first.
+  for(let y=0;y<H;y+=TILE)for(let x=0;x<W;x+=TILE){
+    let nearest=null,distance=Infinity;
+    for(const [id] of cityData){const c=state.cities[id],d=(c.x-x)**2+(c.y-y)**2;if(d<distance){distance=d;nearest=c}}
+    if(distance<150*150){ctx.fillStyle=factions[nearest.owner].color+'27';ctx.fillRect(x,y,TILE,TILE)}
+  }
   // Roads join cities. Their dark border preserves clarity against forests and rivers.
   roads.forEach(([a,b])=>{
     const ca=state.cities[a],cb=state.cities[b];
@@ -176,10 +194,20 @@ function drawMap() {
   ctx.fillStyle='#224d4b88';ctx.font='bold 21px serif';
   [['益 州',101,447],['荆 州',384,365],['中 原',493,214],['江 东',653,484]].forEach(([label,x,y])=>ctx.fillText(label,x,y));
   ctx.fillStyle='#173a3d';ctx.fillRect(745,16,39,42);ctx.strokeStyle='#e6d3a6';ctx.strokeRect(747,18,35,38);ctx.fillStyle='#f6e6b6';ctx.font='bold 17px serif';ctx.fillText('北',754,43);
+  Object.entries(factions).forEach(([key,f])=>{
+    const cities=owned(key);if(!cities.length)return;
+    const centerX=cities.reduce((sum,id)=>sum+state.cities[id].x,0)/cities.length;
+    const centerY=cities.reduce((sum,id)=>sum+state.cities[id].y,0)/cities.length;
+    const x=clamp(Math.round(centerX)-57,8,W-124),y=clamp(Math.round(centerY)-65,10,H-42);
+    ctx.fillStyle='#142b30de';ctx.fillRect(x,y,116,31);ctx.fillStyle=f.color;ctx.fillRect(x,y,5,31);
+    ctx.strokeStyle=f.light;ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,115,30);
+    ctx.fillStyle='#f8edcf';ctx.textAlign='left';ctx.font='bold 15px sans-serif';ctx.fillText(f.name,x+12,y+20);
+    ctx.fillStyle=f.light;ctx.font='10px sans-serif';ctx.fillText(`${cities.length} 城`,x+83,y+20);
+  });
   cityData.forEach(([id,name])=>drawCity(id,name));
 }
 function drawCity(id,name) {
-  const c=state.cities[id],f=factions[c.owner],selected=state.selected===id;
+  const c=state.cities[id],f=factions[c.owner],selected=inspectedCity===id;
   ctx.save();ctx.translate(c.x,c.y);
   if(selected){ctx.fillStyle='#fff0b5';ctx.fillRect(-22,-24,44,3);ctx.fillRect(-22,17,44,3);ctx.fillRect(-22,-24,3,12);ctx.fillRect(19,-24,3,12);ctx.fillRect(-22,8,3,12);ctx.fillRect(19,8,3,12)}
   ctx.fillStyle='#1d3231';ctx.fillRect(-16,-16,32,30);
@@ -188,7 +216,7 @@ function drawCity(id,name) {
   ctx.fillStyle=f.color;ctx.fillRect(-13,-17,26,7);ctx.fillRect(-9,-20,5,4);ctx.fillRect(4,-20,5,4);
   ctx.fillStyle='#e9dda9';ctx.fillRect(-9,-4,5,5);ctx.fillRect(4,-4,5,5);
   ctx.fillStyle='#2e2b26';ctx.fillRect(-3,3,6,8);ctx.fillStyle='#b78c56';ctx.fillRect(-1,4,2,7);
-  ctx.fillStyle='#142a2d';ctx.fillRect(-20,19,40,17);ctx.fillStyle=f.light;ctx.font='bold 14px "Noto Sans SC",sans-serif';ctx.textAlign='center';ctx.fillText(name,0,32);
+  if(selected){ctx.fillStyle='#142a2d';ctx.fillRect(-20,19,40,17);ctx.fillStyle=f.light;ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText(name,0,32)}
   ctx.restore();
 }
 
@@ -254,7 +282,7 @@ function openMarch(id) {
       toast('调兵完成');
     } else {
       const result=resolveBattle(id,t,amount,state.playerFaction);log(result.text);toast(result.short);
-      if(result.won)state.selected=t;
+      if(result.won){state.selected=t;inspectedCity=t}
     }
     if(town.active)leaveTown();
     spendAction(id);checkVictory();render();
@@ -336,20 +364,23 @@ function showFactionSelection() {
 }
 function restart(faction) {
   if (!factions[faction]) return;
-  state = newGame(faction); choosingFaction = false; $('modalClose').style.display = ''; leaveTown(); save(true); closeModal(); render(); toast(`${factions[faction].name}的征途开始了`);
+  state = newGame(faction); inspectedCity = null; choosingFaction = false; $('modalClose').style.display = ''; leaveTown(); save(true); closeModal(); render(); toast(`${factions[faction].name}的征途开始了`);
 }
 
 canvas.addEventListener('click',event=>{
   const r=canvas.getBoundingClientRect(),x=(event.clientX-r.left)*W/r.width,y=(event.clientY-r.top)*H/r.height;
   const found=cityData.find(([id,,cx,cy])=>Math.abs(cx-x)<24&&Math.abs(cy-y)<26);
-  if(found){state.selected=found[0];render()}
+  inspectedCity=found?found[0]:null;
+  if(found)state.selected=found[0];
+  render();
 });
 canvas.addEventListener('mousemove',event=>{
   const r=canvas.getBoundingClientRect(),x=(event.clientX-r.left)*W/r.width,y=(event.clientY-r.top)*H/r.height;
   const found=cityData.find(([id,,cx,cy])=>Math.abs(cx-x)<24&&Math.abs(cy-y)<26);
   canvas.style.cursor=found?'pointer':'default';
-  $('mapHint').textContent=found?`${found[1]} · ${factions[state.cities[found[0]].owner].name} · 兵力 ${fmt(state.cities[found[0]].troops)}`:'点击城池查看详情 · 沿道路向相邻城池进军';
+  $('mapHint').textContent=found?`${found[1]} · ${factions[state.cities[found[0]].owner].name} · 点击查看详情`:'点击城池查看详情 · 点击空白处返回阵营总览';
 });
+$('backToOverview').onclick=()=>{if(town.active)leaveTown();inspectedCity=null;render()};
 $('actions').addEventListener('click',event=>{const button=event.target.closest('[data-action]');if(button)act(button.dataset.action)});
 $('endTurnButton').onclick=nextMonth;
 $('saveButton').onclick=()=>save();
@@ -357,7 +388,7 @@ function confirmNewGame() { modal('开启新局',`<p>当前进度将被覆盖。
 $('newGameButtonTop').onclick=confirmNewGame;
 $('modalClose').onclick=closeModal;
 $('modal').addEventListener('click',event=>{if(event.target===$('modal'))closeModal()});
-$('helpButton').onclick=()=>modal('行军指南',`<p>先选择刘备军、曹操军或孙权军，再统一地图上的 14 座城池。每座我方城池每月可执行两次指令；月末获得金钱和军粮，同时部队消耗军粮。</p><h3>战略与城内</h3><p>战略地图负责选择城池、沿道路行军和即时结算战斗。点击“进入城池游览”可在像素城内行走；靠近府衙、市集、兵营后按 Enter 使用城池指令。</p><h3>操作</h3><p>方向键或 WASD 移动，Enter 交互，N 结束本月，Esc 返回战略地图或关闭窗口。进度保存在当前浏览器。</p><div class="modal-actions"><button id="newGameButton">开启新局</button></div>`);
+$('helpButton').onclick=()=>modal('行军指南',`<p>先选择刘备军、曹操军或孙权军，再统一地图上的 14 座城池。每座我方城池每月可执行两次指令；月末获得金钱和军粮，同时部队消耗军粮。</p><h3>战略与城内</h3><p>战略地图先展示阵营形势。点击城池才会打开兵力、资源和武将详情；点击空白处返回总览。选中我方城池后可沿道路出征，战斗即时结算。进入城内后，靠近建筑并按 Enter 使用指令。</p><h3>操作</h3><p>方向键或 WASD 在城内行走，Enter 交互，N 结束本月，Esc 返回上一级。进度保存在当前浏览器。</p><div class="modal-actions"><button id="newGameButton">开启新局</button></div>`);
 $('modalContent').addEventListener('click',event=>{
   const factionButton=event.target.closest('[data-faction]');
   if(factionButton){restart(factionButton.dataset.faction);return}
@@ -371,6 +402,7 @@ document.addEventListener('keydown',event=>{
     if(choosingFaction)return;
     if(!$('modal').classList.contains('hidden'))closeModal();
     else if(town.active)leaveTown();
+    else if(inspectedCity){inspectedCity=null;render()}
     return;
   }
   if(!$('modal').classList.contains('hidden')||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;
@@ -381,6 +413,7 @@ document.addEventListener('keydown',event=>{
     const move=moves[event.key];if(move){event.preventDefault();moveTown(...move)}
     return;
   }
+  if(!inspectedCity)return;
   if(event.key==='Enter'){if(state.cities[state.selected].owner===state.playerFaction)openMarch(state.selected);return}
   const directions={ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0],ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1]};
   const dir=directions[event.key];if(!dir)return;event.preventDefault();
@@ -391,7 +424,7 @@ document.addEventListener('keydown',event=>{
     const cross=Math.abs(dx*dir[1]-dy*dir[0]);const score=projection+cross*2.3;
     if(score<bestScore){best=id;bestScore=score}
   }
-  if(best){state.selected=best;render()}
+  if(best){state.selected=best;inspectedCity=best;render()}
 });
 render();
 if(choosingFaction)showFactionSelection();
