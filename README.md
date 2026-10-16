@@ -4,7 +4,7 @@
 
 ## 运行
 
-直接打开 `index.html`，或在本目录运行 `python3 -m http.server 8000` 后访问 `http://localhost:8000`。无需安装依赖。游戏会自动在浏览器本地存档，也可点击“存档”。
+运行 `./start.sh`，然后访问 `http://localhost:38471`。可用 `PORT=其他端口 ./start.sh` 指定端口。无需安装依赖。游戏会自动在浏览器本地存档，也可点击“存档”。
 
 ## 玩法
 
