@@ -19,7 +19,11 @@ export async function askJson(prompt, schema, options = {}) {
   const schemaFile = join(dir, 'schema.json');
   const limitMs = options.timeoutMs || timeoutMs;
   const bin = provider === 'claude' ? process.env.PRACTISE_CLAUDE_BIN || 'claude' : process.env.PRACTISE_CODEX_BIN || 'codex';
-  const model = provider === 'claude' ? process.env.PRACTISE_CLAUDE_MODEL : process.env.PRACTISE_CODEX_MODEL;
+  // Claude defaults to sonnet unless the caller asks for another model (system design uses opus);
+  // PRACTISE_CLAUDE_MODEL overrides both. Codex uses its own default unless PRACTISE_CODEX_MODEL is set.
+  const model = provider === 'claude'
+    ? process.env.PRACTISE_CLAUDE_MODEL || options.claudeModel || 'sonnet'
+    : process.env.PRACTISE_CODEX_MODEL;
   const args = provider === 'claude'
     ? ['-p', '--output-format', 'json', '--tools', '', '--no-session-persistence', '--json-schema', JSON.stringify(schema)]
     : ['exec', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--sandbox', 'read-only', '--output-schema', schemaFile, '--output-last-message', outFile, '-'];

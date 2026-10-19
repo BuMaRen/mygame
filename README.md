@@ -17,7 +17,7 @@ PRACTISE_PORT=4700 npm start   # 换端口
 |------|------|------|
 | [english/](english/) | 英文：顺畅阅读 + 基本回复 + 闲聊 | 进行中 |
 | [coding/](coding/) | 算法编码：六个类别下持续生成新题、限时练习、静态评估和复练记录 | 可用 |
-| [system-design/](system-design/) | 系统设计：优先覆盖项目涉及的理念，再练通用架构题；含答题模板、架构图、追问与 AI 评估 | 可用 |
+| [system-design/](system-design/) | 系统设计：第一部分对单个理论和设计方法做专项训练（★ 核心优先），第二部分结合真实业务场景做完整设计；含讲解、小题、架构图、追问与 AI 评估 | 可用 |
 | testing/ | 测试相关 | 待开始 |
 
 - `index.html`：总站点首页，汇总各技能。
@@ -26,7 +26,7 @@ PRACTISE_PORT=4700 npm start   # 换端口
 
 练习记录都在 `*/data/*.json` 里，**跟代码一起提交**，git 历史就是学习记录。
 
-英文、算法和系统设计的 AI 功能默认使用本机的 `claude` CLI。可设置 `PRACTISE_AI_CLI=codex` 改用本机 `codex` CLI；需先安装并登录对应工具。可用 `PRACTISE_CLAUDE_BIN` / `PRACTISE_CODEX_BIN` 指定命令路径，用 `PRACTISE_CLAUDE_MODEL` / `PRACTISE_CODEX_MODEL` 指定模型，用 `PRACTISE_AI_TIMEOUT_MS` 调整超时。算法可在任一类别下反复生成新题，各题的练习与评估记录写入 `coding/data/progress.json`、`system-design/data/progress.json`。算法 AI 只静态审阅代码，须在本机自行运行示例和边界输入。系统设计前六个主题会读取相邻的 `casehub` 和 `auto-test` 仓库文档作为设计背景；其他主题无需这些仓库。
+英文、算法和系统设计的 AI 功能默认使用本机的 `claude` CLI。可设置 `PRACTISE_AI_CLI=codex` 改用本机 `codex` CLI；需先安装并登录对应工具。使用 Claude 时，系统设计默认用 opus，英文和算法默认用 sonnet；设置 `PRACTISE_CLAUDE_MODEL` 会统一覆盖。可用 `PRACTISE_CLAUDE_BIN` / `PRACTISE_CODEX_BIN` 指定命令路径，用 `PRACTISE_CODEX_MODEL` 指定 Codex 模型，用 `PRACTISE_AI_TIMEOUT_MS` 调整超时。算法可在任一类别下反复生成新题，各题的练习与评估记录写入 `coding/data/progress.json`、`system-design/data/progress.json`。算法 AI 只静态审阅代码，须在本机自行运行示例和边界输入。系统设计前六个主题会读取相邻的 `casehub` 和 `auto-test` 仓库文档作为设计背景；其他主题无需这些仓库。
 
 ## 加一个新技能
 

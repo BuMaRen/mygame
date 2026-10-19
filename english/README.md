@@ -53,7 +53,7 @@
 |----------|------|------|
 | `PRACTISE_AI_CLI` | 选择 `claude` 或 `codex` | `claude` |
 | `PRACTISE_CLAUDE_BIN` / `PRACTISE_CODEX_BIN` | 对应命令的路径 | `claude` / `codex` |
-| `PRACTISE_CLAUDE_MODEL` / `PRACTISE_CODEX_MODEL` | 对应 CLI 的模型 | CLI 默认模型 |
+| `PRACTISE_CLAUDE_MODEL` / `PRACTISE_CODEX_MODEL` | 对应 CLI 的模型 | Claude 用 `sonnet`；Codex 用 CLI 默认模型 |
 | `PRACTISE_AI_TIMEOUT_MS` | 单次生成的超时（毫秒） | 300000 |
 
 阅读页点评英文总结也走同一个 CLI（每次约 20–60 秒），点评结果存进 `data/reading.json` 的那条记录，被纠正的点会作为下一天生成计划时的参考。

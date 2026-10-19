@@ -1,16 +1,25 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>系统设计 · practise</title><link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="./style.css"></head><body>
 <main>
-  <div class="page-head"><h1>系统设计</h1><p>先练任务调度、恢复、幂等、经验失效和评审边界，再扩展到通用架构题。每周练 2 个场景，间隔几天复述一次。</p></div>
-  <div class="card" style="margin-bottom:16px"><b>练习顺序</b><p class="muted" style="margin:6px 0 0">5 分钟澄清需求 → 10 分钟画组件与数据流 → 10 分钟解释关键决策 → 5–10 分钟答追问。先回答题目本身；遇到项目事实不确定时再回到文档核对。</p></div>
+  <div class="page-head"><h1>系统设计</h1><p>分两部分：先对单个理论和设计方法做专项训练，再结合真实业务场景做完整设计。</p></div>
+  <div class="sd-parts" role="tablist">
+    <button data-part="concepts" role="tab"><b>第一部分 · 理论与方法</b><span>单个知识点：讲解 → 小题 → 评估；★ 核心优先</span></button>
+    <button data-part="scenarios" role="tab"><b>第二部分 · 业务场景设计</b><span>结合真实业务需求，画架构、写方案、答追问</span></button>
+  </div>
+  <div id="part-concepts"></div>
+  <div id="part-scenarios">
+  <div class="card" style="margin-bottom:16px"><b>练习顺序</b><p class="muted" style="margin:6px 0 0">每周练 2 个场景，间隔几天复述一次。每道题下方列出了建议先在第一部分练好的知识点。</p><p class="muted" style="margin:6px 0 0">5 分钟澄清需求 → 10 分钟画组件与数据流 → 10 分钟解释关键决策 → 5–10 分钟答追问。先回答题目本身；遇到项目事实不确定时再回到文档核对。</p></div>
   <details class="card" style="margin-bottom:16px"><summary><b>第一次答题？展开通用答题格式</b></summary>
     <ol style="margin-top:12px"><li><b>澄清范围：</b>谁使用、做什么、哪些需求暂不覆盖；明确成功标准。</li><li><b>估算规模：</b>请求量、数据量、时延或吞吐目标，说明估算依据。</li><li><b>接口与数据：</b>主要 API / 事件、核心实体、状态变化和数据归属。</li><li><b>架构与主流程：</b>画组件图，沿一条请求讲清读写、同步与异步边界。</li><li><b>异常与一致性：</b>超时、重试、重复请求、节点故障如何处理；说明哪些结果需要强一致。</li><li><b>运行与安全：</b>监控告警、扩容、限流、权限与敏感数据（按题目取舍）。</li><li><b>取舍与演进：</b>说出为何选这个方案、代价、当前瓶颈和下一步优化。</li><li><b>追问：</b>针对面试官改变的约束，修改图和方案。</li></ol>
     <p class="muted small">不必每项写满；与题目无关的部分写“不适用”及理由。<a href="/system-design/answer-guide.html">查看完整示例 →</a></p>
   </details>
-  <div class="grid" style="grid-template-columns:minmax(250px,320px) minmax(0,1fr)"><aside class="card"><h3 style="margin-top:0">训练主题</h3><div id="topics" class="problem-list"></div><p class="small muted" style="margin-top:12px">先练 S01–S06 的可迁移理念，再练 S07–S12 的通用主题。每个主题生成一次题目并保留。</p></aside><section class="card" id="work"><p class="empty">选择主题并生成题目。</p></section></div>
+  <div class="grid" style="grid-template-columns:minmax(250px,320px) minmax(0,1fr)"><aside class="card"><h3 style="margin-top:0">训练主题</h3><div id="topics" class="problem-list"></div><p class="small muted" style="margin-top:12px">先练 S01–S06 的可迁移理念，再练 S07–S12 的通用主题。每个主题生成一次题目并保留，可“换一道题”。</p></aside><section class="card" id="work"><p class="empty">选择主题并生成题目。</p></section></div>
+  </div>
 </main>
 <script type="module">
 import {topbar,api,esc,today,toast,fail} from '/assets/app.js';
 import {TOPICS} from './content/topics.js';
+import {conceptById,LEVELS} from './content/concepts.js';
+import {mountConcepts,selectConcept} from './js/concepts.js';
 topbar({brand:'practise',sub:'系统设计',nav:[{href:'/',label:'总站'},{href:'/coding/',label:'算法编码'}]});
 const work=document.getElementById('work'),topics=document.getElementById('topics');
 let records={},selected=TOPICS[0].id,diagram={nodes:[],edges:[]},selectedNode=null,connectFrom=null,drag=null,saveTimer;
@@ -37,8 +46,9 @@ function questionText(value){return String(value??'').replace(/\\r\\n|\\n|\\r/g,
 function formattedText(value){return esc(questionText(value)).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');}
 function scenarioParagraphs(value){return questionText(value).split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean).map(p=>`<p>${formattedText(p)}</p>`).join('');}
 function questionList(items,kind){return `<${kind}>${items.map(x=>`<li><span>${formattedText(x)}</span></li>`).join('')}</${kind}>`;}
+function conceptChips(t){const items=(t.concepts||[]).map(conceptById).filter(Boolean);return items.length?`<p class="sd-prereq small">建议先在第一部分练好：${items.map(c=>`<a href="#concepts:${c.id}" class="sd-level lv-${c.level}">${esc(c.name)}</a>`).join(' ')}</p>`:'';}
 function render(){renderTopics();const t=TOPICS.find(x=>x.id===selected),r=get(selected),q=r.question;
-  if(!q){work.innerHTML=`<h2 style="margin-top:0">${t.id} ${esc(t.title)}</h2><p>${esc(t.scenario)}</p><p class="small muted">${t.projectRelevant?'这一主题借鉴 CaseHub 和 auto-test 中遇到的问题，但题目不预设解决方案。':'这一主题会生成通用系统设计场景。'}</p><button class="btn primary" id="generate">AI 生成系统设计题</button>`;document.getElementById('generate').onclick=async e=>{const id=selected;e.target.disabled=true;e.target.textContent='生成中…';try{const data=await callAI('generate',{id});await persist(id,{...get(id),question:data.question,questionVersion:data.questionVersion||2,provider:data.provider,sources:data.sources});toast('题目已生成');if(selected===id)render();}catch(err){fail(err);e.target.disabled=false;e.target.textContent='AI 生成系统设计题';}};return;}
+  if(!q){work.innerHTML=`<h2 style="margin-top:0">${t.id} ${esc(t.title)}</h2><p>${esc(t.scenario)}</p>${conceptChips(t)}<p class="small muted">${t.projectRelevant?'这一主题借鉴 CaseHub 和 auto-test 中遇到的问题，但题目不预设解决方案。':'这一主题会生成通用系统设计场景。'}</p><button class="btn primary" id="generate">AI 生成系统设计题</button>`;document.getElementById('generate').onclick=async e=>{const id=selected;e.target.disabled=true;e.target.textContent='生成中…';try{const data=await callAI('generate',{id});await persist(id,{...get(id),question:data.question,questionVersion:data.questionVersion||2,provider:data.provider,sources:data.sources});toast('题目已生成');if(selected===id)render();}catch(err){fail(err);e.target.disabled=false;e.target.textContent='AI 生成系统设计题';}};return;}
   const a=r.answer||{};work.innerHTML=`<section class="sd-question" aria-labelledby="question-title">
     <div class="sd-question-head"><div class="sd-kicker">系统设计练习 <span>${esc(t.id)} · ${esc(t.title)}</span></div><div class="sd-title-row"><h2 id="question-title">${formattedText(q.title)}</h2><span class="badge tech">${esc(r.provider||'本地 AI CLI')} 出题</span></div></div>
     ${!r.questionVersion?'<p class="sd-legacy-note">这道题由旧版规则生成，可能提前给出技术方案。可点下方“换一道题”，旧记录会保留。</p>':''}
@@ -48,6 +58,7 @@ function render(){renderTopics();const t=TOPICS.find(x=>x.id===selected),r=get(s
     <details class="sd-followup-preview"><summary>查看面试官追问（${q.followups.length} 题）</summary>${questionList(q.followups,'ol')}</details>
     <div class="sd-question-action"><span class="muted small">你可以先澄清缺失信息，再提出自己的架构。</span><div class="row"><button class="btn sm" id="regenerate" type="button">换一道题</button><button class="btn primary sm" id="start-answer" type="button">开始作答 ↓</button></div></div>
   </section>
+    ${conceptChips(t)}
     <h3 id="diagram-section">1. 画架构图</h3><p class="small muted">添加组件后拖动摆放；点击起点再按“连线”，点击终点。图会保存到本地 JSON。</p><div class="row" style="margin-bottom:8px"><input id="node-label" type="text" maxlength="14" placeholder="组件，例如 API 服务" style="width:210px"><button class="btn sm" id="add-node">添加组件</button><button class="btn sm" id="connect">连线：先点起点</button><button class="btn sm" id="delete-node">删除选中</button><button class="btn sm" id="clear-diagram">清空图</button></div><svg id="diagram" viewBox="0 0 800 430" role="img" aria-label="可编辑架构图" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;touch-action:none"></svg>
     <h3>2. 按提纲说明方案</h3><div class="field"><label for="requirements">① 需求澄清与成功标准</label><textarea id="requirements" rows="3" placeholder="使用者、核心功能、暂不覆盖的范围、成功指标">${esc(a.requirements||'')}</textarea></div><div class="field"><label for="scale">② 规模与约束估算</label><textarea id="scale" rows="2" placeholder="请求量、数据量、延迟/吞吐目标；说出估算依据">${esc(a.scale||'')}</textarea></div><div class="field"><label for="interfaces">③ 对外接口与事件</label><textarea id="interfaces" rows="3" placeholder="关键 API、输入输出、异步事件；没有对外 API 可说明原因">${esc(a.interfaces||'')}</textarea></div><div class="field"><label for="data">④ 核心数据与状态</label><textarea id="data" rows="3" placeholder="实体、状态机、数据归属、持久化位置">${esc(a.data||'')}</textarea></div><div class="field"><label for="tradeoffs">⑤ 架构、主流程与取舍</label><textarea id="tradeoffs" rows="5" placeholder="沿一条请求讲图中的组件和数据流；解释为什么这样拆">${esc(a.tradeoffs||'')}</textarea></div><div class="field"><label for="failure">⑥ 异常、恢复与一致性</label><textarea id="failure" rows="4" placeholder="超时、重复请求、节点故障；哪些地方需要强一致">${esc(a.failure||'')}</textarea></div><div class="field"><label for="operations">⑦ 运维、容量与安全</label><textarea id="operations" rows="3" placeholder="监控、告警、扩容、限流、权限；按本题需要回答">${esc(a.operations||'')}</textarea></div><div class="field"><label for="review">⑧ 风险边界与演进</label><textarea id="review" rows="3" placeholder="当前方案的代价、风险、人工介入（适用时）、下一阶段如何改进">${esc(a.review||'')}</textarea></div>
     <h3>3. 回答追问</h3>${q.followups.map((f,i)=>`<div class="field"><label for="followup-${i}">${i+1}. ${formattedText(f)}</label><textarea id="followup-${i}" data-followup rows="2">${esc(a.followups?.[i]||'')}</textarea></div>`).join('')}
@@ -61,5 +72,14 @@ function render(){renderTopics();const t=TOPICS.find(x=>x.id===selected),r=get(s
   work.querySelectorAll('textarea').forEach(x=>x.addEventListener('input',scheduleSave));document.getElementById('save').onclick=async()=>{try{await saveCurrent();toast('已保存');}catch(e){fail(e);}};
   document.getElementById('evaluate').onclick=async e=>{const id=selected,answer=answerFromForm(),currentDiagram=structuredClone(diagram);if(!answer.tradeoffs.trim()||currentDiagram.nodes.length<2)return toast('先画至少两个组件，并填写设计取舍');clearTimeout(saveTimer);e.target.disabled=true;e.target.textContent='评估中…';try{const data=await callAI('evaluate',{id,question:q,answer:{...answer,diagram:currentDiagram}});const current=get(id);await persist(id,{...current,answer,diagram:currentDiagram,evaluation:data.evaluation,sessions:[...(current.sessions||[]),{date:today(),score:data.evaluation.score,summary:data.evaluation.summary}]});toast('评估已保存');if(selected===id)render();}catch(err){fail(err);e.target.disabled=false;e.target.textContent='AI 评估方案';}};
 }
-try{records=await api.get('system-design','progress',{});render();}catch(e){fail(e);}
+// Two parts, chosen by hash: #concepts[:id] (default) or #scenarios[:topicId].
+let conceptsMounted=false;
+async function showPart(){const [part,id]=location.hash.slice(1).split(':');const p=part==='scenarios'?'scenarios':'concepts';
+  document.querySelectorAll('[data-part]').forEach(b=>b.classList.toggle('active',b.dataset.part===p));
+  document.getElementById('part-concepts').classList.toggle('hidden',p!=='concepts');document.getElementById('part-scenarios').classList.toggle('hidden',p!=='scenarios');
+  if(p==='concepts'){if(!conceptsMounted){conceptsMounted=true;await mountConcepts(document.getElementById('part-concepts'));}else if(id)selectConcept(id);}
+  else if(id&&TOPICS.some(t=>t.id===id)&&id!==selected){await saveCurrent();selected=id;render();}}
+document.querySelectorAll('[data-part]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.part;});
+window.addEventListener('hashchange',()=>showPart().catch(fail));
+try{records=await api.get('system-design','progress',{});const id=location.hash.match(/^#scenarios:(.+)$/)?.[1];if(TOPICS.some(t=>t.id===id))selected=id;render();await showPart();}catch(e){fail(e);}
 </script></body></html>

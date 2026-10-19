@@ -240,7 +240,7 @@ pre.prompt { white-space: pre-wrap; word-break: break-word; background: var(--su
 .problem-item.selected { background: var(--accent-soft); border-color: var(--accent); }
 .problem-item span { display: block; }
 @media (max-width: 700px) {
-  main > .grid[style*="grid-template-columns:minmax(250px,320px)"] { grid-template-columns: 1fr !important; }
+  main .grid[style*="grid-template-columns:minmax(250px,320px)"] { grid-template-columns: 1fr !important; }
   .problem-list { max-height: 300px; }
 }
 
