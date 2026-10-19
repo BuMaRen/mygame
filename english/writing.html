@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>English · 写作</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<main>
+  <div class="page-head">
+    <h1>写作</h1>
+    <p>写回复时不要从中文翻译，直接从句型里挑一个来套。每天写 2–3 句，交给 AI 改，原句和改后的句子都存下来，再把改后的句子大声读一遍。</p>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="journal">日志</button>
+    <button data-tab="work">工作句型</button>
+    <button data-tab="casual">闲聊句型</button>
+  </div>
+
+  <section data-panel="journal">
+    <div class="card" style="margin-bottom:16px">
+      <div class="row"><h3 style="margin:0">今天写的</h3><span class="spacer"></span>
+        <select id="f-track" style="width:auto"><option value="tech">技术 / 工作</option><option value="daily">日常 / 闲聊</option></select></div>
+      <div class="field" style="margin-top:12px"><label>原句：我自己写的</label><textarea id="f-original" rows="3" placeholder="I today write test for login page, it is fail."></textarea></div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn sm" id="copy-prompt">复制"改我写的句子"提示词（带上原句）</button>
+        <span class="muted small">贴给 AI，把改好的版本粘回下面</span>
+      </div>
+      <div class="field"><label>改后：AI 改过的版本</label><textarea id="f-corrected" rows="3" placeholder="Today I wrote a test for the login page. It failed."></textarea></div>
+      <div class="field"><label>学到了什么</label><input type="text" id="f-learned" placeholder="过去时 write→wrote；fail 是动词，不用 is"></div>
+      <button class="btn primary" id="f-add">保存</button>
+    </div>
+    <div id="entries"></div>
+  </section>
+
+  <section data-panel="work"><div id="work"></div></section>
+  <section data-panel="casual"><div id="casual"></div></section>
+</main>
+<script type="module">
+import { esc, today, uid, toast, copy, tabs, fail } from '/assets/app.js';
+import { header, load, save } from './js/common.js';
+import { TRACK_BY_DAY } from './js/plan.js';
+import { WORK, CASUAL } from './content/phrases.js';
+import { PROMPTS } from './content/prompts.js';
+
+header('writing');
+tabs(document.querySelector('main'));
+
+let journal = [];
+const persist = () => save('journal', journal).catch(fail);
+
+function renderPhrases(elId, set) {
+  document.getElementById(elId).innerHTML = `
+    <div class="row" style="margin-bottom:12px">
+      <input type="text" class="filter" placeholder="搜索句型" style="max-width:260px">
+      <span class="muted small">${esc(set.tip)} 点击句子即可复制。</span>
+    </div>
+    <div class="grid grid-2">${set.groups.map((g) => `<div class="card" data-group>
+      <h3>${esc(g.name)}</h3>
+      ${g.items.map((p) => `<div class="phrase" data-text="${esc(p)}"><span>${esc(p)}</span><span class="copy-hint">复制</span></div>`).join('')}
+    </div>`).join('')}</div>`;
+  const root = document.getElementById(elId);
+  root.querySelectorAll('.phrase').forEach((p) => (p.onclick = () => copy(p.dataset.text)));
+  root.querySelector('.filter').oninput = (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    root.querySelectorAll('[data-group]').forEach((g) => {
+      let any = false;
+      g.querySelectorAll('.phrase').forEach((p) => {
+        const hit = !q || p.dataset.text.toLowerCase().includes(q);
+        p.classList.toggle('hidden', !hit);
+        any ||= hit;
+      });
+      g.classList.toggle('hidden', !any);
+    });
+  };
+}
+
+function renderEntries() {
+  const el = document.getElementById('entries');
+  if (!journal.length) { el.innerHTML = '<div class="card empty">还没有写作记录。</div>'; return; }
+  el.innerHTML = journal.slice().reverse().map((j) => `
+    <div class="card" style="margin-bottom:12px">
+      <div class="row small"><b>${j.date}</b><span class="badge ${j.track}">${j.track === 'tech' ? '技术' : '日常'}</span><span class="spacer"></span>
+        <button class="btn ghost sm" data-del="${j.id}">删除</button></div>
+      <div style="margin-top:8px"><span class="muted small">原：</span>${esc(j.original)}</div>
+      ${j.corrected ? `<div style="margin-top:4px"><span class="muted small">改：</span><b>${esc(j.corrected)}</b></div>` : ''}
+      ${j.learned ? `<div class="answer">学到：${esc(j.learned)}</div>` : ''}
+    </div>`).join('');
+  el.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => {
+    if (!confirm('删除这条记录？')) return;
+    journal = journal.filter((j) => j.id !== b.dataset.del);
+    persist(); renderEntries();
+  }));
+}
+
+const F = (id) => document.getElementById('f-' + id);
+F('track').value = TRACK_BY_DAY[new Date().getDay()] || 'tech';
+document.getElementById('copy-prompt').onclick = () => {
+  const p = PROMPTS.find((x) => x.id === 'correct');
+  copy(p.text.replace(/\{\{[^}]+\}\}/, F('original').value.trim() || '<你写的英文>'));
+};
+F('add').onclick = () => {
+  const original = F('original').value.trim();
+  if (!original) return toast('先写原句');
+  journal.push({ id: uid(), date: today(), track: F('track').value, original, corrected: F('corrected').value.trim(), learned: F('learned').value.trim() });
+  ['original', 'corrected', 'learned'].forEach((k) => (F(k).value = ''));
+  persist(); renderEntries();
+  toast('已保存，记得把改后的句子大声读一遍');
+};
+
+renderPhrases('work', WORK);
+renderPhrases('casual', CASUAL);
+try {
+  journal = await load('journal');
+  renderEntries();
+} catch (e) { fail(e); }
+</script>
+</body>
+</html>

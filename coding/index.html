@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>算法编码 · practise</title><link rel="stylesheet" href="/assets/style.css"></head><body>
+<main>
+  <div class="page-head"><h1>算法编码</h1><p>24 个基础题训练主题。每道正式题目由本地 AI CLI 生成，写完后提交 AI 静态评估，再在本机运行自测。</p></div>
+  <div class="grid grid-4" id="stats"></div>
+  <div class="card" style="margin:16px 0"><b>一次练习：30–40 分钟</b><p class="muted" style="margin:6px 0 0">先口述思路和复杂度 → 开计时器独立写 Python → 用示例及边界条件自测 → 记录卡点。第一次建议 20–25 分钟；复练同题争取 15 分钟内写对。每周选 3–4 道新题和 1–2 道复练题，两个月完成 24 道即可。</p></div>
+  <div class="grid" style="grid-template-columns:minmax(250px,320px) minmax(0,1fr)">
+    <aside class="card"><div class="field"><label for="topic">分类</label><select id="topic"></select></div><div class="field"><label for="status-filter">状态</label><select id="status-filter"><option value="all">全部</option><option value="new">未开始</option><option value="practicing">练习中</option><option value="review">需复练</option><option value="done">稳定通过</option></select></div><div id="list" class="problem-list"></div></aside>
+    <section class="card" id="detail"><p class="empty">选择一道题开始。</p></section>
+  </div>
+</main>
+<script type="module">
+import { topbar, api, esc, today, toast, fail } from '/assets/app.js';
+import { TOPICS, PROBLEMS } from './content/problems.js';
+topbar({brand:'practise',sub:'算法编码',nav:[{href:'/',label:'总站'},{href:'/system-design/',label:'系统设计'}]});
+const skill='coding', list=document.getElementById('list'), detail=document.getElementById('detail');
+const labels={new:'未开始',practicing:'练习中',review:'需复练',done:'稳定通过'};
+let records={}, selected=PROBLEMS[0].id, started=0, elapsed=0, timer, draftTimer;
+const topic=document.getElementById('topic'), filter=document.getElementById('status-filter');
+topic.innerHTML='<option value="all">全部分类</option>'+TOPICS.map(x=>`<option>${esc(x)}</option>`).join('');
+const get=id=>records[id]||{status:'new',attempts:[]};
+function renderStats(){
+  const count=s=>PROBLEMS.filter(p=>get(p.id).status===s).length;
+  document.getElementById('stats').innerHTML=[['24','题目总数'],[count('done'),'稳定通过'],[count('review'),'需复练'],[Object.values(records).reduce((n,r)=>n+(r.attempts?.length||0),0),'练习次数']].map(([n,l])=>`<div class="card stat"><div class="num">${n}</div><div class="label">${l}</div></div>`).join('');
+}
+function renderList(){
+  const shown=PROBLEMS.filter(p=>(topic.value==='all'||p.topic===topic.value)&&(filter.value==='all'||get(p.id).status===filter.value));
+  list.innerHTML=shown.length?shown.map(p=>`<button class="problem-item ${p.id===selected?'selected':''}" data-id="${p.id}"><b>${p.id} ${esc(p.title)}</b><span class="small muted">${esc(p.topic)} · ${esc(p.difficulty)} · ${labels[get(p.id).status]}</span></button>`).join(''):'<p class="empty">没有符合条件的题目。</p>';
+  list.querySelectorAll('[data-id]').forEach(b=>b.onclick=async()=>{try{if(get(selected).question)await saveDraft(false);selected=b.dataset.id;stopTimer();elapsed=0;render();}catch(e){fail(e);}});
+}
+function timeText(n){return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;}
+function stopTimer(){if(started){elapsed+=Math.floor((Date.now()-started)/1000);started=0;}clearInterval(timer);}
+async function callAI(action,payload){const res=await fetch(`/api/coding/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI 请求失败');return data;}
+async function persist(id,record){const next={...records,[id]:record};await api.put(skill,'progress',next);records=next;}
+function renderTimer(){const e=document.getElementById('clock');if(e)e.textContent=timeText(elapsed+(started?Math.floor((Date.now()-started)/1000):0));}
+async function saveDraft(showToast=true){clearTimeout(draftTimer);const r=get(selected);if(!r.question)return;const code=document.getElementById('code').value,note=document.getElementById('note').value,runNote=document.getElementById('run-note').value;const changed=code!==(r.code||'')||note!==(r.note||'')||runNote!==(r.runNote||'');if(!changed)return;await persist(selected,{...r,code,note,runNote,evaluation:null});if(showToast)toast('草稿已保存');}
+function renderDetail(){
+  const p=PROBLEMS.find(x=>x.id===selected),r=get(p.id);
+  detail.innerHTML=`<div class="row"><h2 style="margin:0">${p.id} ${esc(p.title)}</h2><span class="badge tech">${esc(p.topic)}</span><span class="badge">${p.difficulty}</span></div>
+    ${r.question?`<p class="small muted">由 ${esc(r.provider||'本地 AI CLI')} 生成 · ${esc(r.question.title)}</p><p style="white-space:pre-wrap">${esc(r.question.statement)}</p><p><b>函数签名：</b><code>${esc(r.question.signature)}</code></p><b>示例</b><ul>${r.question.examples.map(x=>`<li><code>${esc(x)}</code></li>`).join('')}</ul><b>约束</b><ul>${r.question.constraints.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><details><summary>需要时再看提示</summary><ol>${r.question.hints.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></details>`:`<p class="muted" style="margin-top:14px">训练方向：${esc(p.topic)} / ${esc(p.title)}。生成后会出现完整题目。</p>`}
+    <div class="row" style="margin:12px 0"><button class="btn primary" id="generate" ${r.question?'disabled':''}>${r.question?'题目已固定':'AI 生成题目'}</button><span class="muted small">每个主题首次生成后固定，复练使用同一题。</span></div>
+    ${r.question?`<div class="row"><button class="btn sm" id="timer-btn">${started?'暂停计时':'开始计时'}</button><button class="btn sm" id="timer-reset">清零</button><b id="clock">${timeText(elapsed)}</b><span class="muted small">计时留在当前页面，切题时停止</span></div>
+    <div class="field" style="margin-top:16px"><label for="code">Python 草稿（停止输入后自动保存；请在本机运行自测）</label><textarea id="code" rows="12" spellcheck="false" style="font-family:ui-monospace,monospace">${esc(r.code||'')}</textarea></div>
+    <div class="field"><label for="note">思路、错误和边界情况</label><textarea id="note" rows="3">${esc(r.note||'')}</textarea></div>
+    <div class="field"><label for="run-note">本机运行结果（可选，供 AI 参考）</label><textarea id="run-note" rows="2" placeholder="写下运行的输入、输出、报错或尚未运行">${esc(r.runNote||'')}</textarea></div>
+    <div class="fields" style="margin-top:14px"><div class="field"><label for="result">本次结果</label><select id="result"><option value="passed">独立写对</option><option value="helped">看提示或参考后写对</option><option value="blocked">未完成</option></select></div><div class="field"><label for="minutes">用时（分钟）</label><input id="minutes" type="number" min="0" max="240" value="${Math.ceil(elapsed/60)}"></div></div>
+    <div class="row"><button class="btn primary" id="evaluate">AI 评估代码</button><button class="btn" id="save-attempt">保存本次练习</button><button class="btn" id="save-draft">只保存草稿</button></div>
+    ${r.evaluation?`<div class="card" style="margin-top:16px"><h3 style="margin-top:0">AI 静态评估 · ${esc(r.evaluation.verdict)}</h3><p>${esc(r.evaluation.summary)}</p><b>问题</b><ul>${r.evaluation.issues.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><b>建议本机运行</b><ul>${r.evaluation.testCases.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><p><b>复杂度：</b>${esc(r.evaluation.complexity)}</p><p><b>下一步：</b>${esc(r.evaluation.nextStep)}</p></div>`:''}
+    <h3>历史记录</h3>${r.attempts?.length?`<div class="table-wrap"><table><tr><th>日期</th><th>结果</th><th>用时</th></tr>${r.attempts.slice().reverse().map(a=>`<tr><td>${esc(a.date)}</td><td>${{passed:'独立写对',helped:'借助提示',blocked:'未完成'}[a.result]||''}</td><td>${a.minutes} 分钟</td></tr>`).join('')}</table></div>`:'<p class="muted">还没有练习记录。</p>'}`:''}`;
+  document.getElementById('generate')?.addEventListener('click',async e=>{const id=selected;e.target.disabled=true;e.target.textContent='生成中…';try{const data=await callAI('generate',{id,recent:Object.values(records).map(x=>x.question?.title).filter(Boolean)});await persist(id,{...get(id),question:data.question,provider:data.provider});toast('题目已生成');if(selected===id)render();}catch(err){fail(err);e.target.disabled=false;e.target.textContent='AI 生成题目';}});
+  if(!r.question)return;
+  for(const id of ['code','note','run-note'])document.getElementById(id).addEventListener('input',()=>{clearTimeout(draftTimer);draftTimer=setTimeout(()=>saveDraft(false).catch(fail),900);});
+  document.getElementById('timer-btn').onclick=()=>{if(started){stopTimer();document.getElementById('minutes').value=Math.ceil(elapsed/60);}else{started=Date.now();timer=setInterval(renderTimer,1000);}document.getElementById('timer-btn').textContent=started?'暂停计时':'开始计时';renderTimer();};
+  document.getElementById('timer-reset').onclick=()=>{stopTimer();elapsed=0;renderTimer();document.getElementById('minutes').value=0;};
+  document.getElementById('save-draft').onclick=()=>saveDraft().catch(fail);
+  document.getElementById('save-attempt').onclick=()=>save(true);
+  document.getElementById('evaluate').onclick=async e=>{const id=selected,code=document.getElementById('code').value,note=document.getElementById('note').value,runNote=document.getElementById('run-note').value;if(!code.trim())return toast('先写 Python 代码');clearTimeout(draftTimer);e.target.disabled=true;e.target.textContent='评估中…';try{const data=await callAI('evaluate',{question:r.question,code,notes:runNote});await persist(id,{...get(id),code,note,runNote,evaluation:data.evaluation});toast('评估已保存');if(selected===id)render();}catch(err){fail(err);e.target.disabled=false;e.target.textContent='AI 评估代码';}};
+}
+async function save(attempt){
+  const wasRunning=!!started;stopTimer();if(wasRunning&&Number(document.getElementById('minutes').value)===0)document.getElementById('minutes').value=Math.ceil(elapsed/60);
+  clearTimeout(draftTimer);const p=selected,old=get(p),r={...old,code:document.getElementById('code').value,note:document.getElementById('note').value,runNote:document.getElementById('run-note').value};
+  if(attempt){const result=document.getElementById('result').value,minutes=Number(document.getElementById('minutes').value);if(!Number.isFinite(minutes)||minutes<0||minutes>240){toast('用时请输入 0–240 分钟');return;}
+    if(result!=='blocked'&&(!old.evaluation||r.code!==(old.code||'')))return toast('先提交当前代码给 AI 评估');
+    r.attempts=[...(r.attempts||[]),{date:today(),result,minutes}];
+    const passes=r.attempts.filter(a=>a.result==='passed').length;
+    r.status=result==='blocked'?'review':passes>=2?'done':result==='passed'?'practicing':'review';
+  }
+  try{await persist(p,r);toast(attempt?'已记录练习':'草稿已保存');render();}catch(e){fail(e);}
+}
+function render(){renderStats();renderList();renderDetail();}
+topic.onchange=filter.onchange=renderList;
+try{records=await api.get(skill,'progress',{});render();}catch(e){fail(e);}
+</script></body></html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>English · AI 陪练</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<main>
+  <div class="page-head">
+    <h1>AI 陪练</h1>
+    <p>把 AI 当陪练，不当翻译器：让它出题、改句子、解释结构，而不是把整段翻成中文。填好空格，复制后贴给 Claude。</p>
+  </div>
+  <div class="row" style="margin-bottom:14px">
+    <span class="muted small">显示：</span>
+    <button class="btn sm" data-filter="all">全部</button>
+    <button class="btn sm" data-filter="daily">日常</button>
+    <button class="btn sm" data-filter="tech">技术</button>
+  </div>
+  <div class="grid grid-2" id="list"></div>
+</main>
+<script type="module">
+import { esc, copy } from '/assets/app.js';
+import { header } from './js/common.js';
+import { PROMPTS } from './content/prompts.js';
+
+header('prompts');
+
+const SLOT = /\{\{([^|}]+)(?:\|([^}]*))?\}\}/g;
+const TRACK = { tech: ['tech', '技术'], daily: ['daily', '日常'], both: ['', '通用'] };
+let filter = 'all';
+
+function fill(text, values) {
+  let i = 0;
+  return text.replace(SLOT, (_, name) => values[i++] || `<${name}>`);
+}
+
+function render() {
+  document.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('primary', b.dataset.filter === filter));
+  const list = PROMPTS.filter((p) => filter === 'all' || p.track === filter || p.track === 'both');
+  const el = document.getElementById('list');
+  el.innerHTML = list.map((p) => {
+    const slots = [...p.text.matchAll(SLOT)];
+    const [cls, label] = TRACK[p.track];
+    return `<div class="card" data-id="${p.id}">
+      <div class="row"><h3 style="margin:0">${esc(p.title)}</h3><span class="badge ${cls}">${label}</span></div>
+      <p class="muted small" style="margin:6px 0 10px">${esc(p.use)}</p>
+      ${slots.map(([, name, hint]) => {
+        const long = /段落|句子|英文/.test(name);
+        return `<div class="field"><label>${esc(name)}</label>${long
+          ? `<textarea rows="2" placeholder="${esc(hint || '')}"></textarea>`
+          : `<input type="text" placeholder="${esc(hint || '')}">`}</div>`;
+      }).join('')}
+      <pre class="prompt"></pre>
+      <button class="btn primary copy">复制</button>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('[data-id]').forEach((card) => {
+    const p = PROMPTS.find((x) => x.id === card.dataset.id);
+    const inputs = [...card.querySelectorAll('input, textarea')];
+    const pre = card.querySelector('pre');
+    // An empty field falls back to its first suggested option (if any), so the prompt is usable as-is.
+    const hints = [...p.text.matchAll(SLOT)].map(([, , hint]) => (hint ? hint.split(' / ')[0] : ''));
+    const values = () => inputs.map((x, i) => x.value.trim() || hints[i]);
+    const update = () => (pre.textContent = fill(p.text, values()));
+    inputs.forEach((x) => (x.oninput = update));
+    update();
+    card.querySelector('.copy').onclick = () => copy(fill(p.text, values()));
+  });
+}
+
+document.querySelectorAll('[data-filter]').forEach((b) => (b.onclick = () => { filter = b.dataset.filter; render(); }));
+render();
+</script>
+</body>
+</html>
