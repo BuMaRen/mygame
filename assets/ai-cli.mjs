@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -13,21 +13,24 @@ function parseJson(text) {
   return JSON.parse(clean);
 }
 
-export async function askJson(prompt, schema) {
+export async function askJson(prompt, schema, options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'practise-ai-'));
   const outFile = join(dir, 'answer.json');
+  const schemaFile = join(dir, 'schema.json');
+  const limitMs = options.timeoutMs || timeoutMs;
   const bin = provider === 'claude' ? process.env.PRACTISE_CLAUDE_BIN || 'claude' : process.env.PRACTISE_CODEX_BIN || 'codex';
   const model = provider === 'claude' ? process.env.PRACTISE_CLAUDE_MODEL : process.env.PRACTISE_CODEX_MODEL;
   const args = provider === 'claude'
     ? ['-p', '--output-format', 'json', '--tools', '', '--no-session-persistence', '--json-schema', JSON.stringify(schema)]
-    : ['exec', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--sandbox', 'read-only', '--output-last-message', outFile, '-'];
+    : ['exec', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--sandbox', 'read-only', '--output-schema', schemaFile, '--output-last-message', outFile, '-'];
   if (model) args.splice(provider === 'codex' ? args.length - 1 : args.length, 0, '--model', model);
   try {
+    if (provider === 'codex') await writeFile(schemaFile, JSON.stringify(schema));
     const result = await new Promise((resolve, reject) => {
       const child = spawn(bin, args, { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] });
       let stdout = '', stderr = '', finished = false;
       const done = (error, value) => { if (finished) return; finished = true; clearTimeout(timer); error ? reject(error) : resolve(value); };
-      const timer = setTimeout(() => { child.kill('SIGTERM'); done(new Error(`${provider} CLI 超时（${Math.round(timeoutMs / 1000)} 秒）`)); }, timeoutMs);
+      const timer = setTimeout(() => { child.kill('SIGTERM'); done(new Error(`${provider} CLI 超时（${Math.round(limitMs / 1000)} 秒）`)); }, limitMs);
       child.on('error', e => done(new Error(`无法启动 ${provider} CLI：${e.message}`)));
       child.stdout.on('data', d => { stdout += d; if (stdout.length > maxOutput) { child.kill('SIGTERM'); done(new Error('AI 输出过大')); } });
       child.stderr.on('data', d => { stderr += d; if (stderr.length > maxOutput) stderr = stderr.slice(-maxOutput); });
@@ -38,9 +41,9 @@ export async function askJson(prompt, schema) {
     if (provider === 'claude') {
       const envelope = parseJson(result);
       if (envelope.is_error || envelope.subtype !== 'success') throw new Error(`claude CLI 失败：${String(envelope.result || envelope.subtype).slice(0, 400)}`);
-      return { output: envelope.structured_output ?? parseJson(envelope.result), provider, model: Object.keys(envelope.modelUsage || {}).at(-1) || model || null };
+      return { output: envelope.structured_output ?? parseJson(envelope.result), provider, model: Object.keys(envelope.modelUsage || {}).at(-1) || model || null, costUsd: envelope.total_cost_usd ?? null, durationMs: envelope.duration_ms ?? null };
     }
-    return { output: parseJson(await readFile(outFile, 'utf8')), provider, model: model || null };
+    return { output: parseJson(await readFile(outFile, 'utf8')), provider, model: model || null, costUsd: null, durationMs: null };
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 

@@ -63,7 +63,7 @@
             <td class="muted">休息</td>
           </tr>
         </table></div>
-        <p class="muted small" style="margin:8px 0 0">每天的计划由本地 claude CLI 根据计划框架和你的训练情况生成，当天生成后就固定，不会再变。</p>
+        <p class="muted small" style="margin:8px 0 0">每天的计划由本地 AI CLI（Claude 或 Codex）根据计划框架和你的训练情况生成，当天生成后就固定，不会再变。</p>
       </div>
     </div>
   </div>
@@ -145,13 +145,13 @@ function renderPlan(track, week) {
   if (!track) { el.innerHTML = '<p class="muted">周末休息。想练的话随便读点感兴趣的英文就好，不算任务。</p>'; return; }
   if (!settings.startDate || !week || week < 1) { el.innerHTML = ''; return; }
   if (planState === 'loading') {
-    el.innerHTML = `<div class="row" style="padding:16px 0;flex-wrap:nowrap"><div class="spinner"></div><span>正在调用本地 claude 生成今天的计划……通常需要 30–90 秒。</span></div>`;
+    el.innerHTML = `<div class="row" style="padding:16px 0;flex-wrap:nowrap"><div class="spinner"></div><span>正在调用本地 AI CLI 生成今天的计划……通常需要 30–90 秒。</span></div>`;
     return;
   }
   if (planState === 'error') {
     el.innerHTML = `<div class="banner" style="border-radius:8px;text-align:left">生成失败：${esc(planError)}</div>
       <div class="row" style="margin-top:10px"><button class="btn primary" id="retry">重试</button>
-      <span class="muted small">需要本机能运行 <code>claude</code> 命令并已登录。</span></div>`;
+      <span class="muted small">请确认所选的 Claude 或 Codex CLI 已安装、已登录。</span></div>`;
     el.querySelector('#retry').onclick = generatePlan;
     return;
   }
@@ -176,7 +176,7 @@ function renderPlan(track, week) {
         <div style="min-width:0"><div class="task-text">${title}</div>${t.detail ? `<div class="task-detail">${esc(t.detail)}</div>` : ''}</div>
         <span class="task-min">${t.minutes} 分钟</span></li>`;
     }).join('')}</ul>
-    <p class="muted small" style="margin:10px 0 0">由 ${esc(plan.generator?.model || 'claude')} 生成于 ${new Date(plan.generatedAt).toLocaleString()}${plan.generator?.costUsd != null ? ` · 约 $${plan.generator.costUsd.toFixed(3)}` : ''} · 已固定，不会再变</p>`;
+    <p class="muted small" style="margin:10px 0 0">由 ${esc(plan.generator?.model || plan.generator?.provider || 'AI CLI')} 生成于 ${new Date(plan.generatedAt).toLocaleString()}${plan.generator?.costUsd != null ? ` · 约 $${plan.generator.costUsd.toFixed(3)}` : ''} · 已固定，不会再变</p>`;
   el.querySelectorAll('input[data-id]').forEach((cb) => (cb.onchange = async () => {
     const set = new Set(recordFor(today())?.tasks || []);
     cb.checked ? set.add(cb.dataset.id) : set.delete(cb.dataset.id);

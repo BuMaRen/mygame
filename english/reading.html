@@ -255,16 +255,16 @@ function feedbackHtml(rec) {
       </div>`;
   }
   if (loading) {
-    html += `<div class="row" style="padding:12px 0;flex-wrap:nowrap"><div class="spinner"></div><span>正在请 claude 点评你的总结……通常 20–40 秒。</span></div>`;
+    html += `<div class="row" style="padding:12px 0;flex-wrap:nowrap"><div class="spinner"></div><span>正在请本地 AI 点评你的总结……通常 20–40 秒。</span></div>`;
   } else if (fb.state === 'error' && fb.id === rec.id) {
     html += `<div class="banner" style="border-radius:8px;text-align:left;margin-top:8px">点评失败：${esc(fb.error)}</div>
       <button class="btn sm" id="fb-retry" style="margin-top:8px">重试</button>`;
   } else if (rec.summary || last) {
-    html += `<details style="margin-top:12px" ${last ? '' : 'open'}><summary class="small" style="cursor:pointer">${last ? '照着点评改写，再评一次' : '请 claude 点评这句总结'}</summary>
+    html += `<details style="margin-top:12px" ${last ? '' : 'open'}><summary class="small" style="cursor:pointer">${last ? '照着点评改写，再评一次' : '请 AI 点评这句总结'}</summary>
       <div class="field" style="margin-top:8px"><textarea id="fb-text" rows="2">${esc(last ? '' : rec.summary)}</textarea></div>
       <button class="btn sm primary" id="fb-send">${last ? '再评一次' : '点评'}</button></details>`;
   } else {
-    html += `<div class="field" style="margin-top:8px"><label>补一句英文总结，让 claude 点评</label><textarea id="fb-text" rows="2"></textarea></div>
+    html += `<div class="field" style="margin-top:8px"><label>补一句英文总结，让 AI 点评</label><textarea id="fb-text" rows="2"></textarea></div>
       <button class="btn sm primary" id="fb-send">点评</button>`;
   }
   return html + '<p style="margin-top:12px"><span class="badge ok">✓ 已记入阅读记录</span></p>';

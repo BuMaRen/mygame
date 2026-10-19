@@ -7,7 +7,7 @@ import { TOPICS } from './content/topics.js';
 const ROOT=dirname(dirname(fileURLToPath(import.meta.url)));
 const files=[['casehub/README.md','../casehub/README.md'],['casehub/docs/architecture.md','../casehub/docs/architecture.md'],['auto-test/server/README.md','../auto-test/server/README.md']];
 const questionSchema={type:'object',additionalProperties:false,required:['title','scenario','requirements','constraints','followups','evaluationPoints'],properties:{
-  title:{type:'string'},scenario:{type:'string'},requirements:{type:'array',items:{type:'string'}},constraints:{type:'array',items:{type:'string'}},followups:{type:'array',items:{type:'string'}},evaluationPoints:{type:'array',items:{type:'string'}}}};
+  title:{type:'string'},scenario:{type:'string'},requirements:{type:'array',items:{type:'string'}},constraints:{type:'array',items:{type:'string'}},followups:{type:'array',minItems:4,items:{type:'string'}},evaluationPoints:{type:'array',items:{type:'string'}}}};
 const evalSchema={type:'object',additionalProperties:false,required:['score','summary','strengths','gaps','followupFeedback','improvedOutline','nextExercise'],properties:{
   score:{type:'integer',minimum:0,maximum:100},summary:{type:'string'},strengths:{type:'array',items:{type:'string'}},gaps:{type:'array',items:{type:'string'}},followupFeedback:{type:'array',items:{type:'string'}},improvedOutline:{type:'array',items:{type:'string'}},nextExercise:{type:'string'}}};
 

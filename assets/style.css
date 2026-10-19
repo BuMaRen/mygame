@@ -259,3 +259,11 @@ dialog.dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .passage .w:hover { background: var(--surface-2); }
 .passage .w.unknown { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
 .passage p { font-size: 1.06rem; line-height: 1.85; }
+
+/* Generated coding questions within a category */
+.coding-question-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin: 16px 0; }
+.coding-question { text-align: left; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.coding-question:hover { border-color: var(--accent); }
+.coding-question.selected { background: var(--accent-soft); border-color: var(--accent); }
+.coding-question b, .coding-question span { display: block; overflow-wrap: anywhere; }
+.coding-question-list > p { grid-column: 1 / -1; }

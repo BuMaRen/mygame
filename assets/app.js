@@ -83,7 +83,7 @@ export function topbar({ brand, brandHref = '/', sub, nav = [], active }) {
   el.className = 'topbar';
   el.innerHTML = `<div class="topbar-inner">
     <a class="brand" href="${brandHref}">${esc(brand)}${sub ? ` <span>/ ${esc(sub)}</span>` : ''}</a>
-    <nav class="nav">${nav.map((n) => `<a href="${n.href}" class="${n.key === active ? 'active' : ''}">${esc(n.label)}</a>`).join('')}</nav>
+    <nav class="nav">${nav.map((n) => `<a href="${n.href}" class="${n.key && n.key === active ? 'active' : ''}">${esc(n.label)}</a>`).join('')}</nav>
     <button class="btn ghost sm theme-btn" title="切换深浅色" aria-label="切换深浅色"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
   </div>`;
   el.querySelector('.theme-btn').onclick = () => {
