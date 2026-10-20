@@ -57,7 +57,7 @@
   <section data-panel="vocab"><div id="vocab"></div></section>
 </main>
 <script type="module">
-import { esc, today, uid, toast, copy, tabs, fail } from '/assets/app.js';
+import { esc, today, uid, toast, copy, tabs, fail, beginAI } from '/assets/app.js';
 import { header, load, save, addWordDialog } from './js/common.js';
 import { TRACK_BY_DAY } from './js/plan.js';
 import { tokenize, wordsOf, lexiconProfile } from './js/lexicon.js';
@@ -327,6 +327,7 @@ function bindFeedback(el, rec) {
 async function requestFeedback(id, summary) {
   fb = { state: 'loading', error: '', id, summary };
   renderToday();
+  const finishAI = beginAI('AI 正在点评阅读并解析难句');
   try {
     const r = await fetch('/api/english/summary-feedback', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, summary }),
@@ -335,8 +336,10 @@ async function requestFeedback(id, summary) {
     if (!r.ok) throw new Error(body.error || `点评失败：${r.status}`);
     // The server stored the feedback in reading.json; take its copy of the record.
     reading = reading.map((x) => (x.id === id ? body : x));
+    finishAI();
     fb = { state: 'idle', error: '', id: null };
   } catch (e) {
+    finishAI(e);
     fb = { state: 'error', error: e.message, id, summary };
   }
   renderToday(); renderLog();

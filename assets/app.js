@@ -114,3 +114,44 @@ export function fail(e) {
   console.error(e);
   toast(e.message || String(e));
 }
+
+// Keep long-running local CLI work visible even when its original button scrolls away.
+let aiStatusEl;
+const aiTasks = new Map();
+let aiTimer;
+function renderAIStatus() {
+  if (!aiStatusEl) {
+    aiStatusEl = document.createElement('div');
+    aiStatusEl.className = 'ai-status hidden';
+    aiStatusEl.setAttribute('role', 'status');
+    aiStatusEl.setAttribute('aria-live', 'polite');
+    document.body.append(aiStatusEl);
+  }
+  const entries = [...aiTasks.values()];
+  aiStatusEl.classList.toggle('hidden', !entries.length);
+  aiStatusEl.innerHTML = entries.map(task => `<div class="ai-status-row ${task.state}"><span class="ai-status-icon" aria-hidden="true"></span><span>${esc(task.label)}${task.state === 'running' ? ` · ${Math.floor((Date.now() - task.started) / 1000)} 秒` : task.state === 'done' ? ' · 已完成' : ` · 失败：${esc(task.error)}`}</span>${task.state === 'error' ? `<button type="button" class="btn ghost sm" data-ai-close="${task.id}" aria-label="关闭错误提示">×</button>` : ''}</div>`).join('');
+  aiStatusEl.querySelectorAll('[data-ai-close]').forEach(button => button.onclick = () => { aiTasks.delete(Number(button.dataset.aiClose)); renderAIStatus(); });
+  if (entries.some(task => task.state === 'running')) {
+    if (!aiTimer) aiTimer = setInterval(renderAIStatus, 1000);
+  } else if (aiTimer) { clearInterval(aiTimer); aiTimer = null; }
+}
+let nextAIId = 0;
+export function beginAI(label) {
+  const id = ++nextAIId;
+  aiTasks.set(id, { id, label, started: Date.now(), state: 'running' });
+  renderAIStatus();
+  return (error = null) => {
+    const task = aiTasks.get(id);
+    if (!task) return;
+    task.state = error ? 'error' : 'done';
+    task.error = error?.message || String(error || '');
+    renderAIStatus();
+    if (!error) setTimeout(() => { if (aiTasks.get(id) === task) { aiTasks.delete(id); renderAIStatus(); } }, 4500);
+  };
+}
+
+export async function trackAI(label, work) {
+  const finish = beginAI(label);
+  try { const value = await work(); finish(); return value; }
+  catch (error) { finish(error); throw error; }
+}

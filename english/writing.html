@@ -41,7 +41,7 @@
   <section data-panel="casual"><div id="casual"></div></section>
 </main>
 <script type="module">
-import { esc, today, uid, toast, copy, tabs, fail } from '/assets/app.js';
+import { esc, today, uid, toast, copy, tabs, fail, beginAI } from '/assets/app.js';
 import { header, load, save } from './js/common.js';
 import { TRACK_BY_DAY } from './js/plan.js';
 import { WORK, CASUAL } from './content/phrases.js';
@@ -115,6 +115,7 @@ document.getElementById('ai-correct').onclick = async e => {
   if (!original) return toast('先写英文句子或短段落');
   const button = e.currentTarget, result = document.getElementById('ai-correct-result');
   button.disabled = true; button.textContent = '点评中…';
+  const finishAI = beginAI('AI 正在点评英文写作');
   try {
     const res = await fetch('/api/english/coach', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ templateId: 'correct', values: [original], messages: [] }) });
@@ -122,7 +123,8 @@ document.getElementById('ai-correct').onclick = async e => {
     if (!res.ok) throw new Error(data.error || `AI 请求失败：${res.status}`);
     result.innerHTML = `<div class="answer" style="white-space:pre-wrap;margin-bottom:12px"><b>AI 点评</b><p>${esc(data.reply)}</p>${data.suggestedRevision ? `<p><b>建议改成：</b>${esc(data.suggestedRevision)}</p>` : ''}</div>`;
     if (data.suggestedRevision && !F('corrected').value.trim()) F('corrected').value = data.suggestedRevision;
-  } catch (err) { result.innerHTML = `<div class="banner" style="text-align:left;margin-bottom:12px">${esc(err.message)}</div>`; }
+    finishAI();
+  } catch (err) { finishAI(err); result.innerHTML = `<div class="banner" style="text-align:left;margin-bottom:12px">${esc(err.message)}</div>`; }
   finally { button.disabled = false; button.textContent = '请 AI 点评并改写'; }
 };
 F('add').onclick = () => {

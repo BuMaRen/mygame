@@ -1,6 +1,6 @@
 // Part 1 UI: drill single theories and design methods, one concept at a time.
 // Data: system-design/data/concepts.json → { [conceptId]: { lesson, drills: [...] } }.
-import { api, esc, today, uid, toast, fail } from '/assets/app.js';
+import { api, esc, today, uid, toast, fail, trackAI } from '/assets/app.js';
 import { CONCEPTS, GROUPS, LEVELS, conceptById } from '../content/concepts.js';
 import { TOPICS } from '../content/topics.js';
 
@@ -34,10 +34,13 @@ async function persist(id, record) {
 }
 
 async function callAI(action, payload) {
-  const res = await fetch(`/api/system-design/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'AI 请求失败');
-  return data;
+  const labels = { 'concept-lesson': 'AI 正在生成知识点讲解', 'concept-drill': 'AI 正在生成知识点练习', 'concept-evaluate': 'AI 正在评估知识点回答' };
+  return trackAI(labels[action] || 'AI 正在处理', async () => {
+    const res = await fetch(`/api/system-design/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'AI 请求失败');
+    return data;
+  });
 }
 
 // ---------- rendering ----------

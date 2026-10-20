@@ -16,7 +16,7 @@
   </div>
 </main>
 <script type="module">
-import {topbar,api,esc,today,toast,fail} from '/assets/app.js';
+import {topbar,api,esc,today,toast,fail,trackAI} from '/assets/app.js';
 import {TOPICS} from './content/topics.js';
 import {conceptById,LEVELS} from './content/concepts.js';
 import {mountConcepts,selectConcept} from './js/concepts.js';
@@ -24,7 +24,7 @@ topbar({brand:'practise',sub:'系统设计',nav:[{href:'/',label:'总站'},{href
 const work=document.getElementById('work'),topics=document.getElementById('topics');
 let records={},selected=TOPICS[0].id,diagram={nodes:[],edges:[]},selectedNode=null,connectFrom=null,drag=null,saveTimer;
 const get=id=>records[id]||{sessions:[],answer:{requirements:'',scale:'',interfaces:'',data:'',tradeoffs:'',failure:'',operations:'',review:'',followups:[]},diagram:{nodes:[],edges:[]}};
-async function callAI(action,payload){const res=await fetch(`/api/system-design/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI 请求失败');return data;}
+async function callAI(action,payload){return trackAI(action==='generate'?'AI 正在生成系统设计题':'AI 正在评估系统设计方案',async()=>{const res=await fetch(`/api/system-design/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI 请求失败');return data;});}
 async function persist(id,record){const next={...records,[id]:record};await api.put('system-design','progress',next);records=next;}
 function renderTopics(){topics.innerHTML=TOPICS.map(t=>{const r=get(t.id);return `<button class="problem-item ${selected===t.id?'selected':''}" data-id="${t.id}"><b>${t.id} ${esc(t.title)}</b><span class="small muted">${r.question?'已出题':'未出题'} · 复盘 ${r.sessions?.length||0} 次</span></button>`}).join('');topics.querySelectorAll('button').forEach(b=>b.onclick=()=>{saveCurrent().then(()=>{selected=b.dataset.id;render();}).catch(fail);});}
 function answerFromForm(){if(!get(selected).question)return get(selected).answer;return Object.fromEntries(['requirements','scale','interfaces','data','tradeoffs','failure','operations','review'].map(id=>[id,document.getElementById(id).value]).concat([['followups',[...document.querySelectorAll('[data-followup]')].map(x=>x.value)]]));}

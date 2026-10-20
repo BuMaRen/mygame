@@ -15,7 +15,7 @@
   </div>
 </main>
 <script type="module">
-import {topbar,api,esc,today,uid,toast,fail} from '/assets/app.js';
+import {topbar,api,esc,today,uid,toast,fail,trackAI} from '/assets/app.js';
 import {CATEGORIES} from './content/categories.js';
 topbar({brand:'practise',sub:'算法编码',nav:[{href:'/',label:'总站'},{href:'/system-design/',label:'系统设计'}]});
 const skill='coding',categoryEl=document.getElementById('categories'),questionList=document.getElementById('question-list'),detail=document.getElementById('detail');
@@ -23,7 +23,7 @@ const labels={new:'未开始',practicing:'练习中',review:'需复练',done:'�
 let questions=[],selectedCategory=CATEGORIES[0].id,selectedId=null,started=0,elapsed=0,timer,draftTimer,writeQueue=Promise.resolve();
 const current=()=>questions.find(q=>q.id===selectedId);
 const inCategory=()=>questions.filter(q=>q.category===selectedCategory);
-async function callAI(action,payload){const res=await fetch(`/api/coding/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI 请求失败');return data;}
+async function callAI(action,payload){return trackAI(action==='generate'?'AI 正在生成算法题':'AI 正在评估代码',async()=>{const res=await fetch(`/api/coding/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI 请求失败');return data;});}
 function queueWrite(update){const task=writeQueue.catch(()=>{}).then(async()=>{const next=update(questions);await api.put(skill,'progress',{questions:next});questions=next;});writeQueue=task;return task;}
 function patchQuestion(id,patch){return queueWrite(list=>list.map(q=>q.id===id?{...q,...patch}:q));}
 function persist(question){return patchQuestion(question.id,question);}
