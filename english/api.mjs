@@ -131,6 +131,8 @@ ${PHASES.map((p) => `- 阶段 ${p.n}「${p.name}」第 ${p.from}–${p.to} 周�
 - 阶段 1 默认语法进度：${Object.entries(GRAMMAR_WEEKS).map(([w, ls]) => `第${w}周 ${ls.join('、')}`).join('；')}。周一二学第一课，周三四学第二课，周五复习本周两课。
 - 原则：在语境里学词（只记读到的、会再遇到的，抄原句）；语法只为拆长句服务；先读懂再求快（第一遍不查词）；AI 当陪练不当翻译器；漏掉的天不补，照常做当天的内容。
 - 各环节分工：语法环节只做"讲解 + 练习"，不要让学习者抄例句或收集例句；从材料里找难句、拆长句属于阅读环节；记生词属于阅读和词汇环节。
+- 写作环节给一个具体、有话可说的题目，让学习者用英文表达选择、看法、理由、假设、建议或对某人的回复。阶段 1 写 1–2 句，阶段 2 写 2–4 句，阶段 3 可写一个短段落。技术线可讨论测试或设计中的取舍；日常线可讨论兴趣、生活选择或想象情境。
+- 不要布置每日测试进展汇报、工作状态更新、流水账、当天做了什么、日常总结等任务；也不要把这些内容写进 writing.prompt 或写作任务的 title/detail。题目要有明确问题，而不是笼统要求“练习写作”。例如技术线可问“偶发失败的测试，你会先复现还是先看日志？为什么？”；日常线可问“如果能安排一个不用赶时间的周末，你会怎么过？为什么？”。
 
 ## 可用资料
 语法课（可链接 grammar.html#<id>）：${LESSONS.map((l) => `${l.id} ${l.title}`).join('，')}
@@ -161,7 +163,7 @@ ${JSON.stringify(ctx, null, 2)}
 ## 输出要求
 - tasks：今天的任务，按做的顺序排列，3–6 项，总分钟数约 30（减量时可少）。不要包含"打卡"（页面会自动加）。第一项通常是复习生词。阅读任务的 link 用 reading.html#today。id 用简短的英文 kebab-case，且互不重复。title 用中文写一句可执行的话，detail 写具体怎么做（1–3 句中文）。
 - material：今天的阅读材料，按上面的要求。text 用空行分段。
-- writing：今天的写作 / 闲聊题目（中文说明 + 需要时给英文例句），hints 列出 2–3 个可以套用的句型。
+- writing：今天的英文表达题目，给一个具体问题或情境，说明要写几句或一个短段落；hints 列出 2–3 个适合表达想法和理由的句型。任务清单中安排一项链接到 writing.html#journal 的写作任务，任务内容与 writing.prompt 一致。
 - focus：用一句中文说明今天的重点。
 - adjustments：用 1–2 句中文说明根据训练情况做了什么调整；没有调整就写"按计划进行"。`;
 }
@@ -231,14 +233,33 @@ function sanitizeTasks(tasks) {
     });
 }
 
+const REPORT_TASK = /汇报|总结|进展|今天做了什么|今天的一天|今日工作|daily\s*(?:report|update|summary)|status\s*update/i;
+
+function keepWritingExpressive(plan, track) {
+  const fallback = track === 'tech'
+    ? { prompt: '遇到一个偶发失败的测试时，你会先尝试复现，还是先查看日志？请用英文写 1–2 句，说出你的选择和原因；想多说也可以写一个短段落。', hints: ['I would start with ___ because ___.', 'This could help me ___.'] }
+    : { prompt: '如果能安排一个不用赶时间的周末，你最想做哪两件事？为什么？请用英文写 1–2 句；想多说也可以写一个短段落。', hints: ['I would like to ___ because ___.', 'I would also ___ so I can ___.'] };
+  const replaced = !plan.writing?.prompt || REPORT_TASK.test(plan.writing.prompt);
+  if (replaced) plan.writing = fallback;
+  plan.tasks = plan.tasks.map(task => {
+    if (!task.link?.startsWith('writing.html') && !task.link?.startsWith('prompts.html')) return task;
+    if (!replaced && !REPORT_TASK.test(`${task.title} ${task.detail}`)) return task;
+    return task.link.startsWith('prompts.html')
+      ? { ...task, title: '和 AI 讨论今日表达题目', detail: '围绕今日写作题目交换看法，试着说出一个理由，再问对方一个问题。' }
+      : { ...task, title: '围绕今日题目表达想法', detail: '看今日写作题目，用英文写句子或短段落表达自己的选择和理由。', link: 'writing.html#journal' };
+  });
+  return plan;
+}
+
 async function generate(date) {
   const existing = await readJson(planFile(date), null);
   if (existing) return existing;
   const ctx = await buildContext(date);
   if (!ctx.progress.startDate) throw Object.assign(new Error('还没有设置开始日期'), { status: 400 });
   if (!ctx.progress.week || ctx.progress.week < 1) throw Object.assign(new Error('还没到开始日期'), { status: 400 });
-  const { output: plan, meta } = await runAI(buildPrompt(ctx), SCHEMA);
-  if (!Array.isArray(plan.tasks) || !plan.material) throw new Error('AI CLI 没有返回有效的计划');
+  const { output, meta } = await runAI(buildPrompt(ctx), SCHEMA);
+  if (!Array.isArray(output.tasks) || !output.material) throw new Error('AI CLI 没有返回有效的计划');
+  const plan = keepWritingExpressive(output, TRACK_BY_DAY[parseYmd(date).getDay()]);
   const track = TRACK_BY_DAY[parseYmd(date).getDay()];
   const common = { date, week: ctx.progress.week, phase: ctx.progress.phase.n, track, generatedAt: new Date().toISOString(), generator: meta };
 
