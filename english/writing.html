@@ -26,9 +26,10 @@
         <select id="f-track" style="width:auto"><option value="tech">技术 / 工作</option><option value="daily">日常 / 闲聊</option></select></div>
       <div class="field" style="margin-top:12px"><label>我的英文句子或短段落</label><textarea id="f-original" rows="5" placeholder="I would choose ... because ..."></textarea></div>
       <div class="row" style="margin-bottom:12px">
-        <button class="btn sm" id="copy-prompt">复制"改我写的句子"提示词（带上原句）</button>
-        <span class="muted small">贴给 AI，把改好的版本粘回下面</span>
+        <button class="btn sm" id="ai-correct">请 AI 点评并改写</button>
+        <span class="muted small">直接在本页查看反馈；建议版本会填入下方空白栏</span>
       </div>
+      <div id="ai-correct-result" aria-live="polite"></div>
       <div class="field"><label>改后：AI 改过的版本</label><textarea id="f-corrected" rows="5" placeholder="I would choose ... because ..."></textarea></div>
       <div class="field"><label>学到了什么</label><input type="text" id="f-learned" placeholder="过去时 write→wrote；fail 是动词，不用 is"></div>
       <button class="btn primary" id="f-add">保存</button>
@@ -44,7 +45,6 @@ import { esc, today, uid, toast, copy, tabs, fail } from '/assets/app.js';
 import { header, load, save } from './js/common.js';
 import { TRACK_BY_DAY } from './js/plan.js';
 import { WORK, CASUAL } from './content/phrases.js';
-import { PROMPTS } from './content/prompts.js';
 
 header('writing');
 tabs(document.querySelector('main'));
@@ -110,9 +110,20 @@ function renderEntries() {
 
 const F = (id) => document.getElementById('f-' + id);
 F('track').value = TRACK_BY_DAY[new Date().getDay()] || 'tech';
-document.getElementById('copy-prompt').onclick = () => {
-  const p = PROMPTS.find((x) => x.id === 'correct');
-  copy(p.text.replace(/\{\{[^}]+\}\}/, F('original').value.trim() || '<你写的英文>'));
+document.getElementById('ai-correct').onclick = async e => {
+  const original = F('original').value.trim();
+  if (!original) return toast('先写英文句子或短段落');
+  const button = e.currentTarget, result = document.getElementById('ai-correct-result');
+  button.disabled = true; button.textContent = '点评中…';
+  try {
+    const res = await fetch('/api/english/coach', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateId: 'correct', values: [original], messages: [] }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `AI 请求失败：${res.status}`);
+    result.innerHTML = `<div class="answer" style="white-space:pre-wrap;margin-bottom:12px"><b>AI 点评</b><p>${esc(data.reply)}</p>${data.suggestedRevision ? `<p><b>建议改成：</b>${esc(data.suggestedRevision)}</p>` : ''}</div>`;
+    if (data.suggestedRevision && !F('corrected').value.trim()) F('corrected').value = data.suggestedRevision;
+  } catch (err) { result.innerHTML = `<div class="banner" style="text-align:left;margin-bottom:12px">${esc(err.message)}</div>`; }
+  finally { button.disabled = false; button.textContent = '请 AI 点评并改写'; }
 };
 F('add').onclick = () => {
   const original = F('original').value.trim();

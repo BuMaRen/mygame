@@ -186,6 +186,7 @@ function renderPlan(track, week) {
 
 function renderCheckin(track, week) {
   const ci = document.getElementById('checkin');
+  const pending = ci.querySelector('#ci-min') ? { minutes: ci.querySelector('#ci-min').value, note: ci.querySelector('#ci-note').value } : null;
   const rec = recordFor(viewDate);
   if (!isToday) {
     ci.innerHTML = rec?.done ? `<div class="answer">✓ 当天已打卡（${rec.minutes} 分钟）${rec.note ? '：' + esc(rec.note) : ''}</div>` : '';
@@ -203,6 +204,10 @@ function renderCheckin(track, week) {
     <div class="field"><label>一句话记录（可选）</label><input type="text" id="ci-note" value="${esc(rec?.note || '')}"></div>
     <button class="btn ok" id="ci-btn">打卡</button>
   </div>`;
+  if (pending) {
+    ci.querySelector('#ci-min').value = pending.minutes;
+    ci.querySelector('#ci-note').value = pending.note;
+  }
   ci.querySelector('#ci-btn').onclick = async () => {
     try {
       await upsertToday({ done: true, minutes: Number(ci.querySelector('#ci-min').value) || 0, note: ci.querySelector('#ci-note').value.trim(), track: track || null });

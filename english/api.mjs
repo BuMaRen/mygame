@@ -271,12 +271,12 @@ async function generate(date) {
   return record;
 }
 
-// ---------- feedback on a reading summary ----------
+// ---------- feedback on a reading summary and its hardest sentence ----------
 
 const FEEDBACK_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['understanding', 'corrections', 'corrected', 'better', 'tip'],
+  required: ['understanding', 'corrections', 'corrected', 'better', 'tip', 'sentenceAnalysis'],
   properties: {
     understanding: {
       type: 'object', additionalProperties: false, required: ['level', 'comment'],
@@ -292,11 +292,23 @@ const FEEDBACK_SCHEMA = {
     corrected: { type: 'string' },
     better: { type: 'string' },
     tip: { type: 'string' },
+    sentenceAnalysis: {
+      type: 'object', additionalProperties: false,
+      required: ['sentence', 'mainClause', 'parts', 'naturalMeaning', 'readingTip'],
+      properties: {
+        sentence: { type: 'string' }, mainClause: { type: 'string' },
+        parts: { type: 'array', items: { type: 'object', additionalProperties: false,
+          required: ['text', 'role', 'explanation'], properties: {
+            text: { type: 'string' }, role: { type: 'string' }, explanation: { type: 'string' },
+          } } },
+        naturalMeaning: { type: 'string' }, readingTip: { type: 'string' },
+      },
+    },
   },
 };
 
 function feedbackPrompt(record, material, summary, previous) {
-  return `你是一位耐心的英语老师。学习者是中国软件测试工程师，英语基础薄弱，正在练"读完一篇英文材料后用一句英文总结"。请评价并纠正他的总结。
+  return `你是一位耐心的英语老师。学习者是中国软件测试工程师，英语基础薄弱，正在练阅读理解和拆句。请点评英文总结，并解析他摘出的最难一句。
 
 ${material ? `## 材料（${material.level}，${material.wordCount} 词）
 标题：${material.title}
@@ -304,7 +316,9 @@ ${material.text}` : `## 材料
 标题：${record.title}（没有原文，只评价语言，不评价理解）`}
 
 ## 学习者的英文总结
-${summary}
+${summary || '（这次没有写英文总结）'}
+## 学习者摘出的最难一句
+${record.hard || '（这次没有摘句子）'}
 ${previous.length ? `\n## 之前的版本和反馈（这次是改写后再评）\n${previous.map((a, i) => `第 ${i + 1} 版：${a.summary}\n当时的提示：${a.feedback.tip}`).join('\n')}\n` : ''}
 ## 要求
 - understanding：对照原文判断总结有没有抓住主要意思。level 只能是 准确 / 基本准确 / 偏离；comment 用 1–2 句中文说明，偏离时指出原文真正讲的是什么。没有原文时 level 写"基本准确"，comment 写"没有原文，只看语言"。
@@ -312,6 +326,9 @@ ${previous.length ? `\n## 之前的版本和反馈（这次是改写后再评）
 - corrected：在学习者原句基础上做最小改动的正确版本（保留他的意思和用词）。
 - better：一个更地道、也更完整的总结，用他这个水平能看懂的简单词，1–2 句。
 - tip：用一句中文说出这次最值得记住的一个点。
+- 如果没有英文总结：understanding.level 写"基本准确"，comment 写"未提供英文总结，本次只解析难句"；corrections 返回空数组，corrected、better、tip 返回空字符串。不要把空总结当错误。
+- sentenceAnalysis：如果摘了难句，sentence 保留原句；mainClause 用中文指出主语、谓语和核心意思；parts 按阅读顺序拆出 2–6 个片段，分别写出原文片段 text、语法作用 role、中文解释 explanation；naturalMeaning 给自然的整句中文意思；readingTip 指出读懂这句最关键的一个结构。结合材料上下文解释，不要编造句中没有的成分。没有原文时可只根据摘句本身解析，并指出上下文不确定处。
+- 如果没有摘句子：sentenceAnalysis 的各字符串留空，parts 返回空数组。不要凭空编造难句。
 - 语气鼓励但直接，不要客套。`;
 }
 
@@ -319,9 +336,12 @@ async function summaryFeedback(id, summary) {
   const reading = await data('reading', []);
   const rec = reading.find((r) => r.id === id);
   if (!rec) throw Object.assign(new Error('找不到这条阅读记录'), { status: 404 });
+  summary = summary || rec.summary || '';
+  if (!summary && !rec.hard) throw Object.assign(new Error('请先写英文总结或摘出最难一句'), { status: 400 });
   const material = rec.planDate ? await readJson(materialFile(rec.planDate), null) : null;
   const previous = rec.summaryAttempts || [];
   const { output, meta } = await runAI(feedbackPrompt(rec, material, summary, previous), FEEDBACK_SCHEMA);
+  if (rec.hard && !output.sentenceAnalysis?.mainClause) throw new Error('AI 没有返回难句解析，请重试');
 
   // Re-read before writing so changes made while the CLI ran aren't lost.
   const fresh = await data('reading', []);
@@ -331,6 +351,38 @@ async function summaryFeedback(id, summary) {
   target.summaryAttempts = [...(target.summaryAttempts || []), { summary, at: new Date().toISOString(), feedback: output, generator: meta }];
   await writeFile(join(DATA, 'reading.json'), JSON.stringify(fresh, null, 2) + '\n');
   return target;
+}
+
+// ---------- in-page AI coaching ----------
+
+const COACH_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['reply', 'suggestedRevision'],
+  properties: { reply: { type: 'string' }, suggestedRevision: { type: 'string' } },
+};
+
+function coachPrompt(template, values, messages) {
+  let index = 0;
+  const exercise = template.text.replace(/\{\{([^|}]+)(?:\|([^}]*))?\}\}/g, (_, name, hint) => {
+    const value = String(values[index++] || '').trim().slice(0, 6000) || hint?.split(' / ')[0] || '';
+    if (!value) throw Object.assign(new Error(`请先填写「${name}」`), { status: 400 });
+    return value;
+  });
+  const history = messages.map(m => `${m.role === 'user' ? '学习者' : 'AI'}：${m.content}`).join('\n\n');
+  return `你是英语阅读与写作陪练，学习者有一点旧基础，希望能读懂技术和日常英语，并用简单英文回复。按照下面的练习要求直接进行当前这一轮互动。用清楚、简短、适合初学者的语言；需要解释错误时用中文。不要声称运行了工具。\n\n## 本次练习\n${exercise}\n\n## 已有对话（只作上下文）\n${history || '（尚未开始）'}\n\n## 输出\nreply：本轮给学习者看的回复。若练习要求对话，就继续对话；若要求点评，就直接给具体反馈。不要重复整段历史。\nsuggestedRevision：只有「改我写的句子」练习才填写学习者原文的最小改动正确版本；其他练习写空字符串。只返回 JSON。`;
+}
+
+async function coach(input) {
+  if (!input || typeof input !== 'object') throw Object.assign(new Error('练习参数格式不正确'), { status: 400 });
+  const template = PROMPTS.find(p => p.id === input.templateId);
+  if (!template) throw Object.assign(new Error('请选择有效的陪练项目'), { status: 400 });
+  if (!Array.isArray(input.values) || input.values.length > 8) throw Object.assign(new Error('练习参数格式不正确'), { status: 400 });
+  if (!Array.isArray(input.messages) || input.messages.length > 40) throw Object.assign(new Error('对话过长，请开始新练习'), { status: 400 });
+  const messages = input.messages.map(m => ({ role: m.role, content: String(m.content || '').slice(0, 4000) }));
+  if (messages.some(m => !['user', 'assistant'].includes(m.role) || !m.content.trim()) || (messages.length && messages.at(-1).role !== 'user'))
+    throw Object.assign(new Error('对话格式不正确'), { status: 400 });
+  const result = await runAI(coachPrompt(template, input.values, messages), COACH_SCHEMA);
+  if (!result.output?.reply?.trim()) throw new Error('AI 没有返回有效回复');
+  return { reply: result.output.reply, suggestedRevision: result.output.suggestedRevision || '', ...result.meta };
 }
 
 // ---------- routes ----------
@@ -361,11 +413,17 @@ export async function handle(req, res, action, url, { send, sendJson, readBody }
       return sendJson(res, e.status || 502, { error: e.message });
     }
   }
+  if (action === 'coach' && req.method === 'POST') {
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { return sendJson(res, 400, { error: 'invalid JSON' }); }
+    try { return sendJson(res, 200, await coach(body)); }
+    catch (e) { return sendJson(res, e.status || 502, { error: e.message }); }
+  }
   if (action === 'summary-feedback' && req.method === 'POST') {
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { return sendJson(res, 400, { error: 'invalid JSON' }); }
     const summary = String(body.summary || '').trim();
-    if (!body.id || !summary) return sendJson(res, 400, { error: '缺少记录 id 或总结' });
+    if (!body.id) return sendJson(res, 400, { error: '缺少记录 id' });
     try {
       return sendJson(res, 200, await summaryFeedback(String(body.id), summary));
     } catch (e) {

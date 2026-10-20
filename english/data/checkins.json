@@ -11,5 +11,17 @@
     "minutes": 0,
     "note": "",
     "done": false
+  },
+  {
+    "date": "2026-10-20",
+    "track": "daily",
+    "tasks": [
+      "review-words",
+      "read-l1-daily",
+      "mark-new-words"
+    ],
+    "minutes": 0,
+    "note": "",
+    "done": false
   }
 ]

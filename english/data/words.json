@@ -6,8 +6,9 @@
     "meaning": "指定",
     "sentence": "If no timeout is specified, the default is used.",
     "source": "种子词表",
-    "streak": 0,
-    "known": false
+    "streak": 1,
+    "known": false,
+    "lastReview": "2026-10-20"
   },
   {
     "id": "mveq8pmxuvfmg",
@@ -16,8 +17,9 @@
     "meaning": "假定",
     "sentence": "This guide assumes you have Node installed.",
     "source": "种子词表",
-    "streak": 0,
-    "known": false
+    "streak": 1,
+    "known": false,
+    "lastReview": "2026-10-20"
   },
   {
     "id": "mveq90w6ygpv7",
@@ -26,8 +28,9 @@
     "meaning": "依赖",
     "sentence": "Tests shouldn't depend on each other.",
     "source": "种子词表",
-    "streak": 0,
-    "known": false
+    "streak": 1,
+    "known": false,
+    "lastReview": "2026-10-20"
   },
   {
     "id": "mveq9fghuef68",
@@ -36,8 +39,9 @@
     "meaning": "对应的",
     "sentence": "Each test has a corresponding snapshot.",
     "source": "种子词表",
-    "streak": 0,
-    "known": false
+    "streak": 1,
+    "known": false,
+    "lastReview": "2026-10-20"
   },
   {
     "id": "mveqb5xmkgwyu",
@@ -46,8 +50,9 @@
     "meaning": "冗余的",
     "sentence": "This check is redundant.",
     "source": "种子词表",
-    "streak": 0,
-    "known": false
+    "streak": 1,
+    "known": false,
+    "lastReview": "2026-10-20"
   },
   {
     "id": "mver5vi4ptsax",
@@ -56,6 +61,27 @@
     "meaning": "并行（同时跑多个）",
     "sentence": "It runs your tests in three browsers: Chromium, Firefox, and WebKit.",
     "source": "阅读：Installing Playwright",
+    "streak": 1,
+    "known": false,
+    "lastReview": "2026-10-20"
+  },
+  {
+    "id": "mvgir2j9k2bk8",
+    "date": "2026-10-20",
+    "word": "downtown",
+    "meaning": "市中心",
+    "sentence": "She wants to try a new coffee shop downtown.",
+    "source": "阅读：Anyone else running on autopilot today?",
+    "streak": 0,
+    "known": false
+  },
+  {
+    "id": "mvgir7zzfvffy",
+    "date": "2026-10-20",
+    "word": "couch",
+    "meaning": "沙发",
+    "sentence": "Now I'm home, relaxing on the couch.",
+    "source": "阅读：Anyone else running on autopilot today?",
     "streak": 0,
     "known": false
   }

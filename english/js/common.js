@@ -23,6 +23,7 @@ export const DEFAULTS = {
   reviews: [],
   grammar: {},
   phases: {},
+  coaching: { sessions: {} },
 };
 
 export const load = (name) => api.get(SKILL, name, DEFAULTS[name]);

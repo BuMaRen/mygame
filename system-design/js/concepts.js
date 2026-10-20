@@ -134,8 +134,8 @@ function render() {
 
 // ---------- actions ----------
 
-function select(id) {
-  saveAnswers().catch(fail);
+async function select(id) {
+  try { await saveAnswers(); } catch (e) { fail(e); return; }
   selected = id;
   selectedDrill = rec(id).drills.at(-1)?.id || null;
   history.replaceState(null, '', `#concepts:${id}`);
@@ -157,9 +157,14 @@ async function saveAnswers() {
 }
 
 async function run(kind, fn) {
+  try { await saveAnswers(); } catch (e) { fail(e); return; }
+  const initialConcept = selected, initialDrill = selectedDrill;
   busy = kind;
   renderDetail();
   try { await fn(); } catch (e) { fail(e); }
+  if (selected === initialConcept && selectedDrill === initialDrill) {
+    try { await saveAnswers(); } catch (e) { fail(e); }
+  }
   busy = null;
   render();
 }
@@ -182,7 +187,7 @@ function bindDetail(c) {
     toast('新练习已生成');
   }));
   root.querySelectorAll('[data-drill]').forEach((b) => (b.onclick = async () => {
-    try { await saveAnswers(); } catch (e) { fail(e); }
+    try { await saveAnswers(); } catch (e) { fail(e); return; }
     selectedDrill = b.dataset.drill;
     renderDetail();
   }));

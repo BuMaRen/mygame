@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { askJson as askAI, bodyJson, respond } from '../assets/ai-cli.mjs';
-
-// System design is the hardest reasoning task here, so with Claude it defaults to opus.
-const askJson=(prompt,schema,options={})=>askAI(prompt,schema,{claudeModel:'opus',...options});
+import { askJson, bodyJson, respond } from '../assets/ai-cli.mjs';
 import { TOPICS } from './content/topics.js';
 import { conceptById, LEVELS } from './content/concepts.js';
 

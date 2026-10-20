@@ -96,6 +96,13 @@ function stats(unknownList) {
 
 function renderToday() {
   const el = document.getElementById('today');
+  const previousRecord = recordOf();
+  const form = el.querySelector('#r-summary');
+  if (!previousRecord && form) {
+    draft.form = Object.fromEntries(['r-pct', 'r-min', 'r-summary', 'r-hard'].map(id => [id, el.querySelector('#' + id)?.value || '']));
+  }
+  const feedbackDraft = previousRecord && el.querySelector('#fb-text')?.value;
+  const openAnswers = [...el.querySelectorAll('[data-qa]')].filter(b => !el.querySelector('#qa-' + b.dataset.qa)?.classList.contains('hidden')).map(b => b.dataset.qa);
   if (!material) {
     el.innerHTML = `<div class="card empty">${date === today()
       ? '今天的材料还没有生成。它会和今日计划一起生成——先去<a href="./">今日</a>页。'
@@ -166,11 +173,22 @@ function renderToday() {
           <div class="field"><label>用了几分钟</label><input type="number" id="r-min" min="1" value="10"></div>
         </div>
         <div class="field"><label>一句话英文总结</label><input type="text" id="r-summary"></div>
-        <div class="field"><label>最难的一句（从上文复制），用语法第 08 课的 4 步拆一遍</label><textarea id="r-hard" rows="2"></textarea></div>
+        <div class="field"><label>最难的一句（从上文复制，保存后 AI 会解析结构和句意）</label><textarea id="r-hard" rows="2"></textarea></div>
         <div class="row"><button class="btn primary" id="r-save">保存记录</button>
           <button class="btn" id="r-parse">复制"拆长句"提示词</button>
           <button class="btn ghost" id="r-back">重新标生词</button></div>`}
     </div>` : ''}`;
+
+  if (!rec && draft.form) {
+    for (const [id, value] of Object.entries(draft.form)) {
+      const input = el.querySelector('#' + id);
+      if (input) input.value = value;
+    }
+    const percent = el.querySelector('#r-pct');
+    if (percent) el.querySelector('#r-pct-v').textContent = percent.value + '%';
+  }
+  if (rec?.id === previousRecord?.id && feedbackDraft !== undefined && el.querySelector('#fb-text')) el.querySelector('#fb-text').value = feedbackDraft;
+  openAnswers.forEach(i => el.querySelector('#qa-' + i)?.classList.remove('hidden'));
 
   // marking unknown words
   if (!rec) el.querySelectorAll('#passage .w').forEach((s) => (s.onclick = () => {
@@ -207,7 +225,7 @@ function renderToday() {
   });
   bindFeedback(el, rec);
   el.querySelector('#r-save')?.addEventListener('click', async () => {
-    if (!el.querySelector('#r-summary').value.trim() && !confirm('没写英文总结就不会有点评和纠正。仍然保存？')) return;
+    if (!el.querySelector('#r-summary').value.trim() && !el.querySelector('#r-hard').value.trim() && !confirm('没有填写英文总结或难句，就不会有 AI 点评。仍然保存？')) return;
     const s = stats(draft.unknown);
     reading.push({
       id: uid(), date: today(), planDate: date, title: material.title, url: material.sourceUrl || '',
@@ -218,10 +236,11 @@ function renderToday() {
     try {
       await save('reading', reading);
       try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      draft.form = null;
       toast('已记入阅读记录');
       renderToday(); renderLog(); renderVocab();
       const saved = reading.at(-1);
-      if (saved.summary) requestFeedback(saved.id, saved.summary);
+      if (saved.summary || saved.hard) requestFeedback(saved.id, saved.summary);
     } catch (e) { reading.pop(); fail(e); }
   });
 }
@@ -237,7 +256,7 @@ function feedbackHtml(rec) {
   const LEVEL = { 准确: 'ok', 基本准确: 'tech', 偏离: 'warn' };
   let html = '';
   if (rec.summary && !last) html += `<p><span class="muted small">你的总结：</span>${esc(rec.summary)}</p>`;
-  if (last) {
+  if (last?.summary) {
     const f = last.feedback;
     html += `<div class="row" style="margin:12px 0 6px"><h3 style="margin:0">总结点评</h3><span class="badge ${LEVEL[f.understanding.level] || ''}">理解：${esc(f.understanding.level)}</span>
         ${attempts.length > 1 ? `<span class="muted small">第 ${attempts.length} 版</span>` : ''}</div>
@@ -254,15 +273,27 @@ function feedbackHtml(rec) {
         ${last.savedToJournal ? '<span class="badge ok">✓ 已存进写作日志</span>' : '<button class="btn sm" id="fb-journal">存进写作日志</button>'}
       </div>`;
   }
+  const analysis = last?.feedback?.sentenceAnalysis;
+  if (rec.hard && analysis?.mainClause) {
+    html += `<div class="card" style="margin-top:16px"><h3 style="margin-top:0">最难一句解析</h3>
+      <p style="white-space:pre-wrap">${esc(analysis.sentence || rec.hard)}</p>
+      <p><b>句子主干：</b>${esc(analysis.mainClause)}</p>
+      <b>逐段拆解</b><ol>${(analysis.parts || []).map(part => `<li><code>${esc(part.text)}</code> · ${esc(part.role)}：${esc(part.explanation)}</li>`).join('')}</ol>
+      <p><b>整句意思：</b>${esc(analysis.naturalMeaning)}</p>
+      <p><b>阅读要点：</b>${esc(analysis.readingTip)}</p></div>`;
+  }
   if (loading) {
-    html += `<div class="row" style="padding:12px 0;flex-wrap:nowrap"><div class="spinner"></div><span>正在请本地 AI 点评你的总结……通常 20–40 秒。</span></div>`;
+    html += `<div class="row" style="padding:12px 0;flex-wrap:nowrap"><div class="spinner"></div><span>正在请本地 AI 点评并解析难句……通常 20–40 秒。</span></div>`;
   } else if (fb.state === 'error' && fb.id === rec.id) {
     html += `<div class="banner" style="border-radius:8px;text-align:left;margin-top:8px">点评失败：${esc(fb.error)}</div>
       <button class="btn sm" id="fb-retry" style="margin-top:8px">重试</button>`;
-  } else if (rec.summary || last) {
-    html += `<details style="margin-top:12px" ${last ? '' : 'open'}><summary class="small" style="cursor:pointer">${last ? '照着点评改写，再评一次' : '请 AI 点评这句总结'}</summary>
+  } else if (rec.summary) {
+    if (rec.hard && last && !analysis?.mainClause) html += '<button class="btn sm primary" id="fb-analyze" style="margin-top:12px">解析已摘出的难句</button>';
+    html += `<details style="margin-top:12px" ${last ? '' : 'open'}><summary class="small" style="cursor:pointer">${last ? '照着点评改写，再评一次' : '请 AI 点评总结并解析难句'}</summary>
       <div class="field" style="margin-top:8px"><textarea id="fb-text" rows="2">${esc(last ? '' : rec.summary)}</textarea></div>
       <button class="btn sm primary" id="fb-send">${last ? '再评一次' : '点评'}</button></details>`;
+  } else if (rec.hard) {
+    html += `<button class="btn sm primary" id="fb-send" style="margin-top:12px">${analysis?.mainClause ? '重新解析难句' : '解析难句'}</button>`;
   } else {
     html += `<div class="field" style="margin-top:8px"><label>补一句英文总结，让 AI 点评</label><textarea id="fb-text" rows="2"></textarea></div>
       <button class="btn sm primary" id="fb-send">点评</button>`;
@@ -273,9 +304,10 @@ function feedbackHtml(rec) {
 function bindFeedback(el, rec) {
   if (!rec) return;
   el.querySelector('#fb-retry')?.addEventListener('click', () => requestFeedback(rec.id, fb.summary));
+  el.querySelector('#fb-analyze')?.addEventListener('click', () => requestFeedback(rec.id, rec.summary));
   el.querySelector('#fb-send')?.addEventListener('click', () => {
-    const text = el.querySelector('#fb-text').value.trim();
-    if (!text) return toast('先写一句英文总结');
+    const text = el.querySelector('#fb-text')?.value.trim() || '';
+    if (!text && !rec.hard) return toast('先写一句英文总结');
     requestFeedback(rec.id, text);
   });
   el.querySelector('#fb-journal')?.addEventListener('click', async () => {
