@@ -71,6 +71,10 @@ function renderList() {
       if (!sessionOf(id)) {
         state.sessions[id] = { values: fieldValues(card), messages: [], updatedAt: new Date().toISOString() };
         try { await save('coaching', state); } catch (e) { delete state.sessions[id]; return fail(e); }
+      } else if (!sessionOf(id).messages.length) {
+        const previous = sessionOf(id).values;
+        sessionOf(id).values = fieldValues(card);
+        try { await save('coaching', state); } catch (e) { sessionOf(id).values = previous; return fail(e); }
       }
       activeId = id; error = ''; renderPanel(); renderList();
       document.getElementById('coach-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });

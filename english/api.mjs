@@ -364,11 +364,10 @@ function coachPrompt(template, values, messages) {
   let index = 0;
   const exercise = template.text.replace(/\{\{([^|}]+)(?:\|([^}]*))?\}\}/g, (_, name, hint) => {
     const value = String(values[index++] || '').trim().slice(0, 6000) || hint?.split(' / ')[0] || '';
-    if (!value) throw Object.assign(new Error(`请先填写「${name}」`), { status: 400 });
-    return value;
+    return value || `（学习者尚未提供「${name}」）`;
   });
   const history = messages.map(m => `${m.role === 'user' ? '学习者' : 'AI'}：${m.content}`).join('\n\n');
-  return `你是英语阅读与写作陪练，学习者有一点旧基础，希望能读懂技术和日常英语，并用简单英文回复。按照下面的练习要求直接进行当前这一轮互动。用清楚、简短、适合初学者的语言；需要解释错误时用中文。不要声称运行了工具。\n\n## 本次练习\n${exercise}\n\n## 已有对话（只作上下文）\n${history || '（尚未开始）'}\n\n## 输出\nreply：本轮给学习者看的回复。若练习要求对话，就继续对话；若要求点评，就直接给具体反馈。不要重复整段历史。\nsuggestedRevision：只有「改我写的句子」练习才填写学习者原文的最小改动正确版本；其他练习写空字符串。只返回 JSON。`;
+  return `你是英语阅读与写作陪练，学习者有一点旧基础，希望能读懂技术和日常英语，并用简单英文回复。按照下面的练习要求直接进行当前这一轮互动。用清楚、简短、适合初学者的语言；需要解释错误时用中文。不要声称运行了工具。\n\n## 本次练习\n${exercise}\n\n## 已有对话（只作上下文）\n${history || '（尚未开始）'}\n\n## 开场与缺失内容\n如果学习者没有写第一句，你主动开启话题。练习中的某项内容若标为尚未提供，而最新的学习者消息正好提供了这项内容，就用那条消息完成练习；否则先简短询问学习者，请他提供所需内容。不要对尚未提供的句子、段落或词编造点评。\n\n## 输出\nreply：本轮给学习者看的回复。若练习要求对话，就继续对话；若要求点评，就直接给具体反馈。不要重复整段历史。\nsuggestedRevision：只有「改我写的句子」练习且已收到原文时才填写学习者原文的最小改动正确版本；其他练习写空字符串。只返回 JSON。`;
 }
 
 async function coach(input) {
