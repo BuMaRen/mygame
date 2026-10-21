@@ -18,10 +18,11 @@
     "tasks": [
       "review-words",
       "read-l1-daily",
-      "mark-new-words"
+      "mark-new-words",
+      "ai-chitchat"
     ],
-    "minutes": 0,
+    "minutes": 30,
     "note": "",
-    "done": false
+    "done": true
   }
 ]

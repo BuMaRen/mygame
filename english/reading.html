@@ -124,8 +124,8 @@ function renderToday() {
       <div class="row">
         <h2 style="margin:0">${esc(material.title)}</h2>
         <span class="badge ${material.track}">${trackLabel(material.track)} · ${esc(material.level)}</span>
-        <span class="muted small">${st.wordCount} 词${material.sourceName ? ` · ${material.kind === 'adapted' ? '改编自' : ''} ${esc(material.sourceName)}` : ''}</span>
-        ${material.sourceUrl ? `<a class="small" href="${esc(material.sourceUrl)}" target="_blank" rel="noopener">原文 ↗</a>` : ''}
+        <span class="muted small">${st.wordCount} 词${material.sourceName ? ` · ${material.kind === 'excerpt' ? '原文节选自' : material.kind === 'adapted' ? '改编自' : ''} ${esc(material.sourceName)}` : ''}</span>
+        ${material.sourceUrl ? `<a class="small" href="${esc(material.sourceUrl)}" target="_blank" rel="noopener">原文出处 ↗</a>` : ''}
       </div>
       ${material.why ? `<p class="muted small" style="margin:8px 0 0">为什么选这篇：${esc(material.why)}</p>` : ''}
       ${material.focus ? `<p class="small" style="margin:4px 0 0">读的时候注意：${esc(material.focus)}</p>` : ''}

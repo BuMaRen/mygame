@@ -230,7 +230,7 @@ function renderReading() {
   card.innerHTML = `
     <div class="row"><h3 style="margin:0">今日阅读：${esc(material.title)}</h3>
       <span class="badge ${material.track}">${esc(material.level)}</span>
-      <span class="muted small">${material.wordCount} 词${material.sourceName ? ' · ' + esc(material.sourceName) : ''}</span></div>
+      <span class="muted small">${material.wordCount} 词${material.sourceName ? ' · ' + esc(material.sourceName) : ''}</span>${material.sourceUrl ? `<a class="small" href="${esc(material.sourceUrl)}" target="_blank" rel="noopener">原文出处 ↗</a>` : ''}</div>
     ${material.why ? `<p class="muted small" style="margin:8px 0 0">${esc(material.why)}</p>` : ''}
     <div class="row" style="margin-top:12px">
       <a class="btn ${done ? '' : 'primary'}" href="${href}">${done ? '查看' : '去读 →'}</a>
